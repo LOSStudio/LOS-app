@@ -3,15 +3,15 @@ plugins {
 }
 
 android {
-    namespace = "com.losstudio.losstudio"
+    namespace = "com.losstudio.studio2026"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.losstudio.losstudio"
+        applicationId = "com.losstudio.studio2026"
         minSdk = 24
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 3
+        versionName = "1.2"
     }
 
     buildTypes {
