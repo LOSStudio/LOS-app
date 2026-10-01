@@ -58,6 +58,10 @@ jobs:
             fi
           fi
 
+          rm -f site/index.html
+          cp site/LOS_Studio_Acode_v75.html site/index.html
+          cmp -s site/LOS_Studio_Acode_v75.html site/index.html
+
           cp manifest.webmanifest site/manifest.webmanifest
           cp sw.js site/sw.js
 
@@ -93,6 +97,15 @@ jobs:
               )
 
           p.write_text(s, encoding="utf-8")
+          PY
+
+          python3 - <<'PY'
+          from pathlib import Path
+          s = Path("site/index.html").read_text(encoding="utf-8", errors="ignore")
+          bad = "</script>" + chr(10) + "</body></html>`"
+          if bad in s:
+              raise SystemExit("FATAL: index.html still contains the broken embedded </script> boundary")
+          print("Validated index.html: no broken embedded script boundary")
           PY
 
           echo "Deployed files:"
