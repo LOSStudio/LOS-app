@@ -86,20 +86,23 @@ jobs:
           convert site/icon-512.png -resize 192x192 site/icon-192.png
           file site/icon-192.png site/icon-512.png
 
-          # The clean V75 source does NOT include a manifest link, so add it explicitly.
-          # This is required for the browser to recognise LOS Studio as an installable PWA.
+          # Force a clean, browser-compatible PWA header every build.
+          # Replace any older manifest reference so Samsung/Chrome cannot retain stale metadata.
           python3 - <<'PY'
           from pathlib import Path
+          import re
           p = Path("site/index.html")
           s = p.read_text(encoding="utf-8", errors="ignore")
-          if 'rel="manifest"' not in s:
-              marker = "<head>"
-              injection = '''<link rel="manifest" href="./manifest.webmanifest?v=3">
+          if "<head>" not in s:
+              raise SystemExit("FATAL: <head> not found")
+          s = re.sub(r'<link[^>]+rel=["\']manifest["\'][^>]*>\s*', '', s, flags=re.I)
+          injection = '''<link rel="manifest" href="/LOS-app/manifest.webmanifest">
+          <link rel="icon" type="image/png" sizes="192x192" href="/LOS-app/icon-192.png">
+          <link rel="icon" type="image/png" sizes="512x512" href="/LOS-app/icon-512.png">
+          <link rel="apple-touch-icon" sizes="192x192" href="/LOS-app/icon-192.png">
           <meta name="theme-color" content="#ffffff">
           '''
-              if marker not in s:
-                  raise SystemExit("FATAL: <head> not found")
-              s = s.replace(marker, marker + "\n" + injection, 1)
+          s = s.replace("<head>", "<head>\n" + injection, 1)
           p.write_text(s, encoding="utf-8")
           PY
 
