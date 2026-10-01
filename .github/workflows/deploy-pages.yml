@@ -86,7 +86,23 @@ jobs:
           convert site/icon-512.png -resize 192x192 site/icon-192.png
           file site/icon-192.png site/icon-512.png
 
-          # The V75 source already contains the PWA manifest link.
+          # The clean V75 source does NOT include a manifest link, so add it explicitly.
+          # This is required for the browser to recognise LOS Studio as an installable PWA.
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("site/index.html")
+          s = p.read_text(encoding="utf-8", errors="ignore")
+          if 'rel="manifest"' not in s:
+              marker = "<head>"
+              injection = '''<link rel="manifest" href="./manifest.webmanifest?v=3">
+          <meta name="theme-color" content="#ffffff">
+          '''
+              if marker not in s:
+                  raise SystemExit("FATAL: <head> not found")
+              s = s.replace(marker, marker + "\n" + injection, 1)
+          p.write_text(s, encoding="utf-8")
+          PY
+
           # Add the service-worker registration at the very end of the document.
           # Do NOT insert it at the first </body>: the app contains </body> inside
           # a JavaScript template literal used for printing.
