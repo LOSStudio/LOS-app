@@ -6,6 +6,7 @@ on:
       - 'LOS_Studio_V75_icon_fixed.zip'
       - 'manifest.webmanifest'
       - 'sw.js'
+      - 'shadow-sync.js'
       - '.github/workflows/deploy-pages.yml'
   workflow_dispatch:
 permissions:
@@ -41,6 +42,7 @@ jobs:
           cp site/LOS_Studio_Acode_v75.html site/index.html
           cp manifest.webmanifest site/manifest.webmanifest
           cp sw.js site/sw.js
+          cp shadow-sync.js site/shadow-sync.js
           python3 - <<'PY'
           from pathlib import Path
           import re, base64
@@ -51,8 +53,17 @@ jobs:
           PY
           cp site/icon-512.png site/icon-192.png
           cmp -s site/LOS_Studio_Acode_v75.html site/index.html
-          echo "CLEAN V75 DEPLOYMENT"
-          wc -c site/LOS_Studio_Acode_v75.html site/index.html
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path("site/index.html")
+          s=p.read_text(encoding="utf-8")
+          tag='<script src="./shadow-sync.js"></script>'
+          if tag not in s:
+              s += "\n" + tag + "\n"
+          p.write_text(s,encoding="utf-8")
+          PY
+          echo "V75 SOURCE UNTOUCHED; SHADOW SYNC LAYER INJECTED"
+          wc -c site/LOS_Studio_Acode_v75.html site/index.html site/shadow-sync.js
       - name: Configure Pages
         uses: actions/configure-pages@v5
         with:
