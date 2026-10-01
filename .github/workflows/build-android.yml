@@ -56,30 +56,24 @@ jobs:
           set -euo pipefail
           export ANDROID_HOME=/usr/local/lib/android/sdk
           BUILD_TOOLS="$ANDROID_HOME/build-tools/35.0.0"
+
           printf '%s' "$KEYSTORE_B64" | base64 --decode > /tmp/losstudio-release.keystore
           printf '%s' "$KEYSTORE_PASSWORD" > /tmp/keystore-password.txt
 
-          echo "Checking the registered LOS Studio signing key..."
-          KEYTOOL_OUTPUT="$(keytool -list -v -keystore /tmp/losstudio-release.keystore -storepass "$KEYSTORE_PASSWORD" 2>/tmp/keytool-error.log || true)"
-          if [ -z "$KEYTOOL_OUTPUT" ]; then
-            echo "The keystore password could not unlock the signing key."
-            cat /tmp/keytool-error.log
+          EXPECTED_PASSWORD_SHA256="1aed78ad9fd774b4788089a8fbb41c313450cdf6d3c0921b96998508eaea21bb"
+          ACTUAL_PASSWORD_SHA256="$(printf '%s' "$KEYSTORE_PASSWORD" | sha256sum | cut -d' ' -f1)"
+          if [ "$ACTUAL_PASSWORD_SHA256" != "$EXPECTED_PASSWORD_SHA256" ]; then
+            echo "The GitHub password secret does not match the permanent LOS Studio signing password."
             exit 1
           fi
-
-          KEY_ALIAS="$(printf '%s\n' "$KEYTOOL_OUTPUT" | sed -n 's/^Alias name: //p' | head -n 1)"
-          if [ -z "$KEY_ALIAS" ]; then
-            echo "Could not determine the signing-key alias from the keystore."
-            exit 1
-          fi
-          echo "Signing-key alias detected successfully."
+          echo "Signing password verified."
 
           "$BUILD_TOOLS/zipalign" -f 4 android/app/build/outputs/apk/release/app-release-unsigned.apk /tmp/losstudio-aligned.apk
 
           rm -f android/app/build/outputs/apk/release/LOS-Studio.apk
           "$BUILD_TOOLS/apksigner" sign \
             --ks /tmp/losstudio-release.keystore \
-            --ks-key-alias "$KEY_ALIAS" \
+            --ks-key-alias losstudio \
             --ks-pass file:/tmp/keystore-password.txt \
             --key-pass file:/tmp/keystore-password.txt \
             --pass-encoding utf-8 \
