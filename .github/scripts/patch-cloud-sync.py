@@ -140,5 +140,51 @@ if old_guard in s:
     s=s.replace(old_guard,"",1)
 else:
     raise SystemExit("FATAL: pull timestamp guard not found")
+button_patches = [
+    ('<button class="btn" onclick="losCloudSaveConfig()">Save Cloud Settings', '<button id="losCloudSaveConfigBtn" type="button" class="btn">Save Cloud Settings'),
+    ('<button class="btn secondary" onclick="losCloudSignUp()">Create Cloud Account', '<button id="losCloudSignUpBtn" type="button" class="btn secondary">Create Cloud Account'),
+    ('<button class="btn secondary" onclick="losCloudSignIn()">Sign In', '<button id="losCloudSignInBtn" type="button" class="btn secondary">Sign In'),
+    ('<button class="btn secondary" onclick="losCloudSignOut()">Sign Out', '<button id="losCloudSignOutBtn" type="button" class="btn secondary">Sign Out'),
+]
+for old, new in button_patches:
+    if old not in s:
+        raise SystemExit("FATAL: cloud control button not found: "+old)
+    s = s.replace(old, new, 1)
+
+s += """
+<script>
+(function(){
+  const buttons={
+    losCloudSaveConfigBtn:'losCloudSaveConfig',
+    losCloudSignUpBtn:'losCloudSignUp',
+    losCloudSignInBtn:'losCloudSignIn',
+    losCloudSignOutBtn:'losCloudSignOut'
+  };
+  function bind(){
+    for(const [id,name] of Object.entries(buttons)){
+      const b=document.getElementById(id);
+      if(!b||b.dataset.losCloudBound==='1')continue;
+      b.dataset.losCloudBound='1';
+      b.addEventListener('click',()=>{
+        const fn=window[name];
+        if(typeof fn!=='function'){
+          alert('LOS Studio cloud controls are still loading. Please wait a moment and try again.');
+          return;
+        }
+        try{
+          const result=fn();
+          if(result&&typeof result.catch==='function')result.catch(e=>console.error(e));
+        }catch(e){
+          console.error(e);
+          alert(e.message||String(e));
+        }
+      });
+    }
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bind,{once:true});
+  else bind();
+})();
+</script>
+"""
 p.write_text(s, encoding="utf-8")
 print("Cloud sync patch applied to site/index.html")
