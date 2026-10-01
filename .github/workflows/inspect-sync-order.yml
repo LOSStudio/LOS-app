@@ -1,4 +1,4 @@
-name: Inspect sync persistence
+name: Inspect orders bridge
 on:
   push:
     branches: [main]
@@ -10,14 +10,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Extract exact sync function
-        run: |
+      - run: |
           unzip -q LOS_Studio_V75_icon_fixed.zip -d /tmp/v75
           f="$(find /tmp/v75 -name LOS_Studio_Acode_v75.html -print -quit)"
           python3 - "$f" <<'PY'
           import sys,re
           s=open(sys.argv[1],encoding='utf-8',errors='ignore').read()
-          for a,b in [('window.losCloudPull=','window.losCloudSyncNow='),('function saveState','function loadState')]:
-            i=s.find(a); j=s.find(b,i+1)
-            print("\n===== "+a+" =====\n"+s[i:j if j>i else i+12000])
+          for n in ['initLegacyOrdersFrame','syncLegacyOrdersFrame','legacyNewOrder','LOS_ORDER']:
+            print("\n===== "+n+" =====")
+            for m in list(re.finditer(n,s,re.I))[:10]:
+              a=max(0,m.start()-900);b=min(len(s),m.end()+3500)
+              print(s[a:b].replace("\n"," ")[:4500])
           PY
