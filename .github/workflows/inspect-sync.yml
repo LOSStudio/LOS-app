@@ -1,0 +1,32 @@
+name: Inspect V75 sync
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/inspect-sync.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect sync code
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/v75
+          mkdir /tmp/v75
+          unzip -q "LOS_Studio_V75_icon_fixed.zip" -d /tmp/v75
+          f="$(find /tmp/v75 -name 'LOS_Studio_Acode_v75.html' -print -quit)"
+          test -n "$f"
+          python3 - "$f" <<'PY'
+          import sys,re
+          s=open(sys.argv[1],encoding='utf-8',errors='ignore').read()
+          for name in ['losCloudPush','losCloudPull','losCloudSyncNow','losCloudSetAutoSync','losCloudSchedulePush']:
+              print("\n===== "+name+" =====")
+              m=re.search(r'(?i).{0,180}'+re.escape(name)+r'.{0,3500}',s,re.S)
+              print(m.group(0)[:4200] if m else 'NOT FOUND')
+          print("\n===== ALL SUPABASE LOS SYNC REFERENCES =====")
+          for m in re.finditer(r'.{0,120}(?:los_studio_sync|supabase|cloudRow|cloudPull|cloudPush).{0,300}',s,re.I|re.S):
+              print(m.group(0)[:500].replace("\n"," "))
+          PY
