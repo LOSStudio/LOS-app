@@ -1,0 +1,105 @@
+name: Test isolated cloud sync
+on:
+  push:
+    branches: [sync-repair-v75]
+permissions:
+  contents: read
+jobs:
+  validate-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build untouched V75 baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf site
+          mkdir -p site
+          unzip -q "LOS_Studio_V75_icon_fixed.zip" -d site
+          shopt -s dotglob
+          entries=(site/*)
+          if [ "${#entries[@]}" -eq 1 ] && [ -d "${entries[0]}" ]; then
+            tmp="site_flat"
+            mkdir "$tmp"
+            cp -a "${entries[0]}"/. "$tmp"/
+            rm -rf site
+            mv "$tmp" site
+          fi
+          test -f site/LOS_Studio_Acode_v75.html
+          cp site/LOS_Studio_Acode_v75.html site/index.html
+          cmp -s site/LOS_Studio_Acode_v75.html site/index.html
+          echo "BASELINE V75 MATCH: PASS"
+      - name: Inspect baseline sync implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -nE "los_orders_workspace|los_inventory|supabase|upsert|localStorage|auto.?sync|AUTO.?SYNC|Push This Device|Pull Cloud Data" site/LOS_Studio_Acode_v75.html | head -n 250 || true
+      - name: Apply sync layer only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/patch-cloud-sync.py
+          test -f site/index.html
+          echo "SYNC PATCH: APPLIED"
+      - name: Validate V75 source stayed untouched
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmp -s site/LOS_Studio_Acode_v75.html site/index.html && { echo "ERROR: patch did not apply"; exit 1; } || true
+          python3 - <<'PY'
+          from pathlib import Path
+          import re, base64
+          h=Path("site/index.html").read_text(encoding="utf-8")
+          assert "Cloud sync patch applied" not in h
+          m=re.search(r"const LEGACY_ORDERS_HTML_B64\s*=\s*['\"]([^'\"]+)", h)
+          assert m, "legacy Orders blob missing"
+          legacy=base64.b64decode(m.group(1)).decode("utf-8")
+          assert "type:'LOS_V1533_ORDER_SUMMARIES'" in legacy
+          assert "orders:clone(orders)" in legacy
+          assert "orderHistory:" in legacy
+          assert "LOS_V1533_NEW_ORDER" not in h or "legacyNewOrder" not in h
+          print("SYNC-ONLY STRUCTURE CHECKS: PASS")
+          print("index bytes:", len(h))
+          print("legacy bytes:", len(legacy))
+          PY
+      - name: JavaScript syntax checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --version
+          python3 - <<'PY'
+          from pathlib import Path
+          import re, subprocess, tempfile
+          h=Path("site/index.html").read_text(encoding="utf-8")
+          scripts=re.findall(r"<script(?:\\s[^>]*)?>(.*?)</script>", h, re.S|re.I)
+          print("inline script blocks:",len(scripts))
+          checked=0
+          for i,src in enumerate(scripts):
+              if not src.strip(): continue
+              p=Path(f"/tmp/los_script_{i}.js")
+              p.write_text(src,encoding="utf-8")
+              r=subprocess.run(["node","--check",str(p)],capture_output=True,text=True)
+              if r.returncode:
+                  print("SCRIPT SYNTAX FAILURE",i)
+                  print(r.stderr[-4000:])
+                  raise SystemExit(1)
+              checked+=1
+          print("INLINE JAVASCRIPT SYNTAX CHECKS: PASS",checked)
+          PY
+      - name: Detect accidental visible JavaScript leakage
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          h=Path("site/index.html").read_text(encoding="utf-8")
+          visible=re.sub(r"<script\\b[^>]*>.*?</script>", "", h, flags=re.S|re.I)
+          visible=re.sub(r"<style\\b[^>]*>.*?</style>", "", visible, flags=re.S|re.I)
+          bad=[]
+          for token in ["function saveOrdersNow()", "window.supabase.createClient", "AndroidSupabase.request", "const originalSetItem=Storage.prototype.setItem"]:
+              if token in visible: bad.append(token)
+          assert not bad, "JavaScript leaked into visible HTML: "+", ".join(bad)
+          print("VISIBLE SCRIPT LEAK CHECK: PASS")
+          PY
