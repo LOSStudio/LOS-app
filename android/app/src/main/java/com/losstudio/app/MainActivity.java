@@ -49,93 +49,112 @@ public class MainActivity extends Activity {
                 return "{\"error\":\"Blocked native request: non-Supabase URL\"}";
             }
 
-            HttpURLConnection connection = null;
-            try {
-                JSONObject request = new JSONObject(requestJson == null ? "{}" : requestJson);
-                String method = request.optString("method", "GET").toUpperCase();
-                JSONObject headers = request.optJSONObject("headers");
-                String body = request.optString("body", "");
+            Exception lastError = null;
+            for (int attempt = 0; attempt < 2; attempt++) {
+                HttpURLConnection connection = null;
+                try {
+                    JSONObject request = new JSONObject(requestJson == null ? "{}" : requestJson);
+                    String method = request.optString("method", "GET").toUpperCase();
+                    JSONObject headers = request.optJSONObject("headers");
+                    String body = request.optString("body", "");
 
-                connection = (HttpURLConnection) new URL(url).openConnection();
-                connection.setRequestMethod(method);
-                connection.setConnectTimeout(15000);
-                connection.setReadTimeout(30000);
-                connection.setUseCaches(false);
-                connection.setInstanceFollowRedirects(true);
+                    connection = (HttpURLConnection) new URL(url).openConnection();
+                    connection.setRequestMethod(method);
+                    connection.setConnectTimeout(20000);
+                    connection.setReadTimeout(45000);
+                    connection.setUseCaches(false);
+                    connection.setInstanceFollowRedirects(true);
+                    // Avoid Android connection reuse/transparent gzip paths that can
+                    // abort long Supabase REST requests with "Software caused connection abort".
+                    connection.setRequestProperty("Connection", "close");
+                    connection.setRequestProperty("Accept-Encoding", "identity");
+                    connection.setRequestProperty("User-Agent", "LOS-Studio-Android/1.3");
 
-                if (headers != null) {
-                    Iterator<String> keys = headers.keys();
-                    while (keys.hasNext()) {
-                        String key = keys.next();
-                        String value = headers.optString(key, "");
-                        if (!"host".equalsIgnoreCase(key)
-                                && !"content-length".equalsIgnoreCase(key)) {
+                    if (headers != null) {
+                        Iterator<String> keys = headers.keys();
+                        while (keys.hasNext()) {
+                            String key = keys.next();
+                            String value = headers.optString(key, "");
+                            if ("host".equalsIgnoreCase(key)
+                                    || "content-length".equalsIgnoreCase(key)
+                                    || "connection".equalsIgnoreCase(key)
+                                    || "accept-encoding".equalsIgnoreCase(key)
+                                    || "user-agent".equalsIgnoreCase(key)) {
+                                continue;
+                            }
                             connection.setRequestProperty(key, value);
                         }
                     }
-                }
 
-                if (!body.isEmpty()
-                        && !"GET".equals(method)
-                        && !"HEAD".equals(method)) {
-                    connection.setDoOutput(true);
-                    byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
-                    connection.setFixedLengthStreamingMode(bytes.length);
-                    connection.getOutputStream().write(bytes);
-                    connection.getOutputStream().close();
-                }
+                    if (!body.isEmpty()
+                            && !"GET".equals(method)
+                            && !"HEAD".equals(method)) {
+                        connection.setDoOutput(true);
+                        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+                        connection.setFixedLengthStreamingMode(bytes.length);
+                        connection.getOutputStream().write(bytes);
+                        connection.getOutputStream().close();
+                    }
 
-                int status = connection.getResponseCode();
-                InputStream stream = status >= 400
-                        ? connection.getErrorStream()
-                        : connection.getInputStream();
+                    int status = connection.getResponseCode();
+                    InputStream stream = status >= 400
+                            ? connection.getErrorStream()
+                            : connection.getInputStream();
 
-                String responseBody = "";
-                if (stream != null) {
-                    try (BufferedReader reader = new BufferedReader(
-                            new InputStreamReader(stream, StandardCharsets.UTF_8))) {
-                        StringBuilder out = new StringBuilder();
-                        String line;
-                        while ((line = reader.readLine()) != null) {
-                            out.append(line).append('\n');
-                        }
-                        responseBody = out.toString();
-                        if (responseBody.endsWith("\n")) {
-                            responseBody = responseBody.substring(0, responseBody.length() - 1);
+                    String responseBody = "";
+                    if (stream != null) {
+                        try (BufferedReader reader = new BufferedReader(
+                                new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+                            StringBuilder out = new StringBuilder();
+                            String line;
+                            while ((line = reader.readLine()) != null) {
+                                out.append(line).append('\\n');
+                            }
+                            responseBody = out.toString();
+                            if (responseBody.endsWith("\\n")) {
+                                responseBody = responseBody.substring(0, responseBody.length() - 1);
+                            }
                         }
                     }
-                }
 
-                JSONObject response = new JSONObject();
-                response.put("status", status);
-                response.put("statusText", connection.getResponseMessage() == null
-                        ? "" : connection.getResponseMessage());
+                    JSONObject response = new JSONObject();
+                    response.put("status", status);
+                    response.put("statusText", connection.getResponseMessage() == null
+                            ? "" : connection.getResponseMessage());
 
-                JSONObject responseHeaders = new JSONObject();
-                for (Map.Entry<String, java.util.List<String>> entry
-                        : connection.getHeaderFields().entrySet()) {
-                    String key = entry.getKey();
-                    if (key == null || entry.getValue() == null || entry.getValue().isEmpty()) {
-                        continue;
+                    JSONObject responseHeaders = new JSONObject();
+                    for (Map.Entry<String, java.util.List<String>> entry : connection.getHeaderFields().entrySet()) {
+                        String key = entry.getKey();
+                        if (key == null || entry.getValue() == null || entry.getValue().isEmpty()) {
+                            continue;
+                        }
+                        responseHeaders.put(key, String.join(", ", entry.getValue()));
                     }
-                    responseHeaders.put(key, String.join(", ", entry.getValue()));
-                }
 
-                response.put("headers", responseHeaders);
-                response.put("body", responseBody);
-                return response.toString();
-            } catch (Exception e) {
-                try {
-                    return new JSONObject()
-                            .put("error", "Native Supabase request failed: " + e.getMessage())
-                            .toString();
-                } catch (Exception ignored) {
-                    return "{\"error\":\"Native Supabase request failed\"}";
+                    response.put("headers", responseHeaders);
+                    response.put("body", responseBody);
+                    return response.toString();
+                } catch (Exception e) {
+                    lastError = e;
+                    if (attempt == 0) {
+                        try { Thread.sleep(250); } catch (InterruptedException ignored) {
+                            Thread.currentThread().interrupt();
+                        }
+                    }
+                } finally {
+                    if (connection != null) {
+                        connection.disconnect();
+                    }
                 }
-            } finally {
-                if (connection != null) {
-                    connection.disconnect();
-                }
+            }
+
+            try {
+                return new JSONObject()
+                        .put("error", "Native Supabase request failed: "
+                                + (lastError == null ? "unknown error" : lastError.getMessage()))
+                        .toString();
+            } catch (Exception ignored) {
+                return "{\"error\":\"Native Supabase request failed\"}";
             }
         }
     }
