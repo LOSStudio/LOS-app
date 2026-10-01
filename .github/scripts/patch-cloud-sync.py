@@ -120,5 +120,13 @@ legacy = legacy.replace(old_lp, new_lp, 1)
 
 encoded = base64.b64encode(legacy.encode("utf-8")).decode("ascii")
 s = s[:m.start(1)] + encoded + s[m.end(1):]
+
+# Make the visible Pull Cloud Data button an explicit refresh. Do not let an old local timestamp block it.
+old_guard="""      if(cloudTime<=localTime){setStatus('Cloud copy already pulled on this device.',true);return}
+"""
+if old_guard in s:
+    s=s.replace(old_guard,"",1)
+else:
+    raise SystemExit("FATAL: pull timestamp guard not found in embedded site source")
 p.write_text(s, encoding="utf-8")
 print("Cloud sync patch applied to site/index.html")
