@@ -57,22 +57,20 @@ jobs:
           cp manifest.webmanifest site/manifest.webmanifest
           cp sw.js site/sw.js
 
-          # Escape closing script tags that occur inside the application's
-          # JavaScript template literals. A raw </script> inside a JS string
-          # still terminates the surrounding HTML script element in a browser.
+          # Fix the one literal </script> inside the inventory print template.
+          # It is HTML inside a JavaScript template literal, so the browser would
+          # otherwise terminate the outer script and display the remaining JS.
           python3 - <<'PY'
           from pathlib import Path
           p = Path("site/index.html")
           s = p.read_text(encoding="utf-8", errors="ignore")
-
-          marker = "function printInventoryActivity(){"
-          start = s.find(marker)
-          if start != -1:
-              end = s.find("</script>\\n</body>", start)
-              if end != -1:
-                  block = s[start:end]
-                  block = block.replace("</script>", "<\\\\/script>")
-                  s = s[:start] + block + s[end:]
+          s = s.replace(
+              "</script>\n</body></html>`",
+              "<\\/script>\n</body></html>`",
+              1
+          )
+          p.write_text(s, encoding="utf-8")
+          PY
 
           p.write_text(s, encoding="utf-8")
           PY
