@@ -128,11 +128,9 @@ jobs:
           print(f"Extracted icon-512.png: {len(raw)} bytes")
           PY
 
-          if ! command -v convert >/dev/null 2>&1; then
-            sudo apt-get update -qq
-            sudo apt-get install -y -qq imagemagick
-          fi
-          convert site/icon-512.png -resize 192x192 site/icon-192.png
+          # Keep the exact embedded LOS Studio artwork for both PWA icon sizes.
+          # Avoid installing image tooling on the Pages runner; that can stall deployment.
+          cp site/icon-512.png site/icon-192.png
           file site/icon-192.png site/icon-512.png
 
           # Force a Samsung/Chrome-compatible manifest directly into the page.
