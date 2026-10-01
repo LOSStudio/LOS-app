@@ -80,7 +80,46 @@ jobs:
           marker="const origPersist=window.persistHistoryState;"
           if marker not in s:
               raise SystemExit("FATAL: cloud persist hook not found")
-          auto = r'''\n// LOS Studio automatic cross-device cloud sync.\nwindow.__losAutoCloudPull = async function(){\n  try{\n    if(typeof initClient!=='function'||typeof user!=='function'||typeof cloudRow!=='function')return false;\n    if(typeof syncing!=='undefined'&&syncing)return false;\n    if(localStorage.getItem(AUTO_KEY)==='0')return false;\n    const row=await cloudRow();\n    const remoteMs=row&&row.updated_at?(new Date(row.updated_at).getTime()||0):0;\n    const seenMs=Math.max(new Date(localStorage.getItem('losStudioCloudLastPullV1')||0).getTime()||0,new Date(localStorage.getItem('losStudioCloudLastPushV1')||0).getTime()||0);\n    if(row&&remoteMs>seenMs&&row.device_id!==deviceId){\n      await losCloudPull();\n      try{localStorage.setItem('losStudioCloudLocalFingerprintV1',JSON.stringify(serialisableState()))}catch(e){}\n      return true;\n    }\n    let snap='';\n    try{snap=JSON.stringify(serialisableState())}catch(e){return false}\n    const last=localStorage.getItem('losStudioCloudLocalFingerprintV1')||'';\n    if(snap!==last){\n      await losCloudPush(true);\n      localStorage.setItem('losStudioCloudLocalFingerprintV1',snap);\n      return true;\n    }\n  }catch(e){console.warn('LOS automatic cloud sync',e)}\n  return false;\n};\nwindow.__losAutoCloudStart = function(){\n  if(window.__losAutoCloudTimer)return;\n  const tick=()=>{try{window.__losAutoCloudPull()}catch(e){}};\n  window.__losAutoCloudTimer=setInterval(tick,5000);\n  window.addEventListener('focus',tick);\n  document.addEventListener('visibilitychange',()=>{if(!document.hidden)tick()});\n  setTimeout(tick,800);\n};\nsetTimeout(()=>{try{window.__losAutoCloudStart()}catch(e){}},1500);\n'''\n          s=s.replace(marker,auto+"\n"+marker,1)
+          auto = r'''
+// LOS Studio automatic cross-device cloud sync.
+window.__losAutoCloudPull = async function(){
+  try{
+    if(typeof initClient!=='function'||typeof user!=='function'||typeof cloudRow!=='function')return false;
+    if(typeof syncing!=='undefined'&&syncing)return false;
+    if(localStorage.getItem(AUTO_KEY)==='0')return false;
+    const row=await cloudRow();
+    const remoteMs=row&&row.updated_at?(new Date(row.updated_at).getTime()||0):0;
+    const seenMs=Math.max(
+      new Date(localStorage.getItem('losStudioCloudLastPullV1')||0).getTime()||0,
+      new Date(localStorage.getItem('losStudioCloudLastPushV1')||0).getTime()||0
+    );
+    if(row&&remoteMs>seenMs&&row.device_id!==deviceId){
+      await losCloudPull();
+      try{localStorage.setItem('losStudioCloudLocalFingerprintV1',JSON.stringify(serialisableState()))}catch(e){}
+      return true;
+    }
+    let snap='';
+    try{snap=JSON.stringify(serialisableState())}catch(e){return false}
+    const last=localStorage.getItem('losStudioCloudLocalFingerprintV1')||'';
+    if(snap!==last){
+      await losCloudPush(true);
+      localStorage.setItem('losStudioCloudLocalFingerprintV1',snap);
+      return true;
+    }
+  }catch(e){console.warn('LOS automatic cloud sync',e)}
+  return false;
+};
+window.__losAutoCloudStart = function(){
+  if(window.__losAutoCloudTimer)return;
+  const tick=()=>{try{window.__losAutoCloudPull()}catch(e){}};
+  window.__losAutoCloudTimer=setInterval(tick,5000);
+  window.addEventListener('focus',tick);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)tick()});
+  setTimeout(tick,800);
+};
+setTimeout(()=>{try{window.__losAutoCloudStart()}catch(e){}},1500);
+'''
+          s=s.replace(marker,auto+"\n"+marker,1)
           p.write_text(s,encoding="utf-8")
           PY
 
