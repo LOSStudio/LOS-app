@@ -1,5 +1,5 @@
-const CACHE_NAME = "los-studio-v1";
-const APP_SHELL = ["./", "./manifest.webmanifest", "./sw.js"];
+const CACHE_NAME = "los-studio-v2";
+const APP_SHELL = ["./", "./manifest.webmanifest", "./sw.js", "./icon-192.png", "./icon-512.png"];
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()));
 });
