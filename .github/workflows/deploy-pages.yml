@@ -63,10 +63,14 @@ jobs:
           from pathlib import Path
           p = Path("site/index.html")
           s = p.read_text(encoding="utf-8", errors="ignore")
-          bad = "</script>\\n</body></html>`"
-          good = "<\\/script>\\n</body></html>`"
-          if bad in s:
-              p.write_text(s.replace(bad, good, 1), encoding="utf-8")
+          replacements = {
+              "</script>\\n</body></html>`": "<\\/script>\\n</body></html>`",
+              "</script>setTimeout(()=>window.print(),400)<\\/script><script>": "<\\/script>setTimeout(()=>window.print(),400)<\\/script><script>"
+          }
+          for bad, good in replacements.items():
+              if bad in s:
+                  s = s.replace(bad, good, 1)
+          p.write_text(s, encoding="utf-8")
           PY
 
           python3 - <<'PY'
