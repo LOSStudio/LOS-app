@@ -60,9 +60,17 @@ new_serial = """  function serialisableState(){
       const savedHistory=localStorage.getItem('los_orders_history')||localStorage.getItem('los_history');
       if(savedOrders)out.legacyOrders=JSON.parse(savedOrders);
       if(savedHistory)out.legacyOrderHistory=JSON.parse(savedHistory);
-      const cloudKeys=['losStudioBlueprintV1','los_business_profile','los_inventory','los_packaging','los_history','los_orders','los_orders_workspace','los_orders_history','los_db_customers','los_db_purchases','los_db_adjustments','los_hmrc_expenses_ledger'];
+      // Do not copy the giant losStudioBlueprintV1 blob through Supabase.
+      // The structured app state plus the targeted legacy stores below are
+      // sufficient for cross-device sync and keep Android WebView responsive.
+      const cloudKeys=['los_business_profile','los_inventory','los_packaging','los_history','los_orders','los_orders_workspace','los_orders_history','los_db_customers','los_db_purchases','los_db_adjustments','los_hmrc_expenses_ledger'];
       out.localStorageData={};
-      for(const key of cloudKeys){try{const value=localStorage.getItem(key);if(value!==null)out.localStorageData[key]=value}catch(e){}}
+      for(const key of cloudKeys){
+        try{
+          const value=localStorage.getItem(key);
+          if(value!==null)out.localStorageData[key]=value;
+        }catch(e){}
+      }
     }catch(e){console.warn('Legacy Orders cloud snapshot:',e)}
     return out;
   }"""
