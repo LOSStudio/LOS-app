@@ -1,4 +1,4 @@
-name: Inspect orders bridge
+name: Inspect embedded Orders storage
 on:
   push:
     branches: [main]
@@ -14,11 +14,14 @@ jobs:
           unzip -q LOS_Studio_V75_icon_fixed.zip -d /tmp/v75
           f="$(find /tmp/v75 -name LOS_Studio_Acode_v75.html -print -quit)"
           python3 - "$f" <<'PY'
-          import sys,re
+          import sys,re,base64
           s=open(sys.argv[1],encoding='utf-8',errors='ignore').read()
-          for n in ['initLegacyOrdersFrame','syncLegacyOrdersFrame','legacyNewOrder','LOS_ORDER']:
-            print("\n===== "+n+" =====")
-            for m in list(re.finditer(n,s,re.I))[:10]:
-              a=max(0,m.start()-900);b=min(len(s),m.end()+3500)
-              print(s[a:b].replace("\n"," ")[:4500])
+          m=re.search(r'LEGACY_ORDERS_HTML_B64\s*=\s*["\']([^"\']+)',s)
+          print("B64 FOUND",bool(m),"LEN",len(m.group(1)) if m else 0)
+          if m:
+            x=base64.b64decode(m.group(1)).decode('utf-8','ignore')
+            for p in ['localStorage','sessionStorage','postMessage','LOS_PARENT_TO_V1533','LOS_V1533_ORDER_SUMMARIES','LOS_V1533_ORDER_SAVE','save','persist']:
+              print("\n===",p,"===")
+              for z in list(re.finditer(p,x,re.I))[:15]:
+                print(x[max(0,z.start()-500):z.end()+1200].replace("\n"," ")[:1800])
           PY
