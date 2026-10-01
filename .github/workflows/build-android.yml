@@ -56,14 +56,43 @@ jobs:
 
       - name: Download Gradle
         run: |
-          curl -L --fail --retry 3             https://services.gradle.org/distributions/gradle-8.9-bin.zip             -o /tmp/gradle.zip
+          curl -L --fail --retry 3 https://services.gradle.org/distributions/gradle-8.9-bin.zip -o /tmp/gradle.zip
           unzip -q /tmp/gradle.zip -d /tmp
 
-      - name: Build signed debug APK
+      - name: Build release APK
+        shell: bash
         run: |
           cd android
-          /tmp/gradle-8.9/bin/gradle :app:assembleDebug --no-daemon
-          ls -lh app/build/outputs/apk/debug/app-debug.apk
+          /tmp/gradle-8.9/bin/gradle :app:assembleRelease --no-daemon
+          ls -lh app/build/outputs/apk/release/app-release-unsigned.apk
+
+      - name: Sign and align release APK for device testing
+        shell: bash
+        run: |
+          set -e
+          export ANDROID_HOME=/usr/local/lib/android/sdk
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/35.0.0"
+          keytool -genkeypair -v \
+            -keystore /tmp/losstudio-test.keystore \
+            -alias losstudio \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass losstudio-test \
+            -keypass losstudio-test \
+            -dname "CN=LOS Studio Test, O=LOS Studio, C=GB"
+          "$BUILD_TOOLS/zipalign" -f 4 \
+            android/app/build/outputs/apk/release/app-release-unsigned.apk \
+            /tmp/losstudio-aligned.apk
+          "$BUILD_TOOLS/apksigner" sign \
+            --ks /tmp/losstudio-test.keystore \
+            --ks-key-alias losstudio \
+            --ks-pass pass:losstudio-test \
+            --key-pass pass:losstudio-test \
+            --out android/app/build/outputs/apk/release/LOS-Studio.apk \
+            /tmp/losstudio-aligned.apk
+          "$BUILD_TOOLS/apksigner" verify --verbose android/app/build/outputs/apk/release/LOS-Studio.apk
+          ls -lh android/app/build/outputs/apk/release/LOS-Studio.apk
 
       - name: Publish APK release
         uses: softprops/action-gh-release@v2
@@ -72,6 +101,7 @@ jobs:
           name: LOS Studio Android ${{ github.run_number }}
           body: |
             LOS Studio Android test build.
-            This APK opens the live LOS Studio app directly, with the LOS Studio name and icon.
-          files: android/app/build/outputs/apk/debug/app-debug.apk
+            This is a signed release APK for direct device testing.
+            It opens the live LOS Studio app directly, with the LOS Studio name and icon.
+          files: android/app/build/outputs/apk/release/LOS-Studio.apk
           generate_release_notes: false
