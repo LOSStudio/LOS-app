@@ -66,21 +66,6 @@ jobs:
           from pathlib import Path
           p = Path("site/index.html")
           s = p.read_text(encoding="utf-8", errors="ignore")
-          s = s.replace(
-              "</script>\n</body></html>`",
-              "<\\/script>\n</body></html>`",
-              1
-          )
-          p.write_text(s, encoding="utf-8")
-          PY
-
-          p.write_text(s, encoding="utf-8")
-          PY
-
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path("site/index.html")
-          s = p.read_text(encoding="utf-8", errors="ignore")
 
           if 'rel="manifest"' not in s and "rel='manifest'" not in s:
               s = s.replace(
