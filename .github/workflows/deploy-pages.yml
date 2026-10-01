@@ -7,6 +7,7 @@ on:
       - 'manifest.webmanifest'
       - 'sw.js'
       - '.github/workflows/deploy-pages.yml'
+      - '.github/scripts/patch-cloud-sync.py'
   workflow_dispatch:
 permissions:
   contents: read
@@ -51,7 +52,9 @@ jobs:
           PY
           cp site/icon-512.png site/icon-192.png
           cmp -s site/LOS_Studio_Acode_v75.html site/index.html
-          echo "CLEAN V75 DEPLOYMENT"
+          echo "CLEAN V75 SOURCE VERIFIED BEFORE SYNC LAYER"
+          python3 .github/scripts/patch-cloud-sync.py
+          echo "ISOLATED CLOUD SYNC LAYER APPLIED"
           wc -c site/LOS_Studio_Acode_v75.html site/index.html
       - name: Configure Pages
         uses: actions/configure-pages@v5
