@@ -70,6 +70,19 @@ jobs:
           # Keep the embedded legacy Orders workspace in the same cloud-backed state.
           python3 .github/scripts/patch-cloud-sync.py
 
+          # Refresh the embedded Orders workspace immediately after a cloud pull.
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path("site/index.html")
+          s=p.read_text(encoding="utf-8",errors="ignore")
+          marker="setStatus('Cloud data pulled successfully · '+new Date(row.updated_at).toLocaleString(),true);"
+          replacement="try{syncLegacyOrdersFrame()}catch(e){};setTimeout(()=>{try{syncLegacyOrdersFrame()}catch(e){}},300);"+marker
+          if marker not in s:
+              raise SystemExit("FATAL: cloud pull success marker not found")
+          s=s.replace(marker,replacement,1)
+          p.write_text(s,encoding="utf-8")
+          PY
+
           # Build the real PWA icons from the exact LOS Studio logo already embedded
           # in the V75 app. This keeps the installed icon identical to the app logo.
           python3 - <<'PY'
