@@ -80,8 +80,8 @@ jobs:
           PY
 
           if ! command -v convert >/dev/null 2>&1; then
-            echo "FATAL: ImageMagick convert is not available on the GitHub runner."
-            exit 1
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq imagemagick
           fi
           convert site/icon-512.png -resize 192x192 site/icon-192.png
           file site/icon-192.png site/icon-512.png
