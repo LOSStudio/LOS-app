@@ -1,4 +1,4 @@
-name: Inspect order load source
+name: Inspect order load calls
 on:
   push:
     branches: [main]
@@ -17,8 +17,6 @@ jobs:
           import sys,re,base64
           s=open(sys.argv[1],encoding='utf-8',errors='ignore').read()
           x=base64.b64decode(re.search(r'LEGACY_ORDERS_HTML_B64\s*=\s*["\']([^"\']+)',s).group(1)).decode('utf-8','ignore')
-          for p in [r'let orders=',r'var orders=',r'const orders=',r'orders=JSON.parse\(localStorage.getItem\([\'"]los_orders_workspace',r'function loadForm',r'function saveForm',r'function current\(']:
-            print("\n===",p,"===")
-            for m in list(re.finditer(p,x,re.I))[:8]:
-              print(x[max(0,m.start()-800):m.end()+1800].replace("\n"," ")[:3000])
+          for m in re.finditer(r'los_orders_workspace',x,re.I):
+            print(x[max(0,m.start()-700):m.end()+1000].replace("\n"," ")[:1800])
           PY
