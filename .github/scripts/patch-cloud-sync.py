@@ -238,9 +238,8 @@ s += """
 })();
 </script>
 """
-p.write_text(s, encoding="utf-8")
-print("Cloud sync patch applied to site/index.html")
 
+s += """
 <script>
 (function(){
   const originalSetItem=Storage.prototype.setItem;
@@ -259,3 +258,6 @@ print("Cloud sync patch applied to site/index.html")
   };
 })();
 </script>
+"""
+p.write_text(s, encoding="utf-8")
+print("Cloud sync patch applied to site/index.html")
