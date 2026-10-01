@@ -1,4 +1,4 @@
-name: Inspect order load calls
+name: Inspect auto sync storage listener
 on:
   push:
     branches: [main]
@@ -14,9 +14,10 @@ jobs:
           unzip -q LOS_Studio_V75_icon_fixed.zip -d /tmp/v75
           f="$(find /tmp/v75 -name LOS_Studio_Acode_v75.html -print -quit)"
           python3 - "$f" <<'PY'
-          import sys,re,base64
+          import sys,re
           s=open(sys.argv[1],encoding='utf-8',errors='ignore').read()
-          x=base64.b64decode(re.search(r'LEGACY_ORDERS_HTML_B64\s*=\s*["\']([^"\']+)',s).group(1)).decode('utf-8','ignore')
-          for m in re.finditer(r'los_orders_workspace',x,re.I):
-            print(x[max(0,m.start()-700):m.end()+1000].replace("\n"," ")[:1800])
+          for p in ['losCloudSchedulePush','storage','losCloudSetAutoSync','losCloudAutoSyncV1']:
+            print("\n===",p,"===")
+            for m in list(re.finditer(p,s,re.I))[:20]:
+              print(s[max(0,m.start()-800):m.end()+1800].replace("\n"," ")[:3000])
           PY
