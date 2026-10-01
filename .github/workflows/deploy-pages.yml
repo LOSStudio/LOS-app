@@ -60,7 +60,7 @@ jobs:
           # Fix the literal </script> inside the inventory print template.
           # It is HTML inside a JavaScript template literal, so it must be escaped
           # before GitHub Pages serves the file.
-          python3 -c 'from pathlib import Path; p=Path("site/index.html"); s=p.read_text(encoding="utf-8",errors="ignore"); s=s.replace("</script>\\n</body></html>`","<\\/script>\\n</body></html>`",1); p.write_text(s,encoding="utf-8")'
+          python3 -c 'from pathlib import Path; p=Path("site/index.html"); s=p.read_text(encoding="utf-8",errors="ignore"); s=s.replace("</script>"+chr(10)+"</body></html>`","<\\/script>"+chr(10)+"</body></html>`",1); p.write_text(s,encoding="utf-8")'
 
           python3 - <<'PY'
           from pathlib import Path
