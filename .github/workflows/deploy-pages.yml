@@ -59,6 +59,10 @@ jobs:
           new="function serialisableState(){const s=JSON.parse(JSON.stringify(state));if(s.info&&Object.prototype.hasOwnProperty.call(s.info,'logoData'))delete s.info.logoData;try{s._syncOrdersWorkspace=JSON.parse(localStorage.getItem('los_orders_workspace')||'null');s._syncOrdersHistory=JSON.parse(localStorage.getItem('los_orders_history')||'null')}catch(e){}return s}"
           if old not in s: raise SystemExit("Sync patch target not found")
           s=s.replace(old,new,1)
+          auto="const origPersist=window.persistHistoryState;"
+          auto_new="const origPersist=window.persistHistoryState;window.addEventListener('storage',function(ev){if(ev.storageArea===localStorage&&['los_orders_workspace','los_orders_history'].includes(ev.key))setTimeout(losCloudSchedulePush,0)});"
+          if auto not in s: raise SystemExit("Auto-sync hook target not found")
+          s=s.replace(auto,auto_new,1)
           pull="const imported=row.state;if(!imported||typeof imported!=='object')throw new Error('Cloud record is empty or invalid.');"
           pull_new="const imported=row.state;if(!imported||typeof imported!=='object')throw new Error('Cloud record is empty or invalid.');try{if(Array.isArray(imported._syncOrdersWorkspace))localStorage.setItem('los_orders_workspace',JSON.stringify(imported._syncOrdersWorkspace));if(Array.isArray(imported._syncOrdersHistory))localStorage.setItem('los_orders_history',JSON.stringify(imported._syncOrdersHistory))}catch(e){console.warn('Cloud Orders workspace restore skipped',e)}"
           if pull not in s: raise SystemExit("Cloud pull target not found")
