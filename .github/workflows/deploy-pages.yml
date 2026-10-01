@@ -70,6 +70,21 @@ jobs:
           # Keep the embedded legacy Orders workspace in the same cloud-backed state.
           python3 .github/scripts/patch-cloud-sync.py
 
+          # Make cloud sync truly automatic: pull newer data from the same cloud account
+          # in the background on every open/focus and every 5 seconds. No manual Pull button
+          # and no confirmation prompt are required for normal cross-device sync.
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path("site/index.html")
+          s=p.read_text(encoding="utf-8",errors="ignore")
+          marker="const origPersist=window.persistHistoryState;"
+          if marker not in s:
+              raise SystemExit("FATAL: cloud persist hook not found")
+          auto = r'''\n// LOS Studio automatic cross-device cloud sync.\nwindow.__losAutoCloudPull = async function(){\n  try{\n    if(typeof initClient!=='function'||typeof user!=='function'||typeof cloudRow!=='function')return;\n    if(typeof syncing!=='undefined'&&syncing)return;\n    if(localStorage.getItem(AUTO_KEY)==='0')return;\n    const row=await cloudRow();\n    if(!row||!row.updated_at||row.device_id===deviceId)return;\n    const remoteMs=new Date(row.updated_at).getTime();\n    const seenMs=Math.max(\n      new Date(localStorage.getItem('losStudioCloudLastPullV1')||0).getTime()||0,\n      new Date(localStorage.getItem('losStudioCloudLastPushV1')||0).getTime()||0\n    );\n    if(!(remoteMs>seenMs))return;\n    const imported=row.state||{};\n    state={...state,...imported,info:{...state.info,...(imported.info||{})}};\n    for(const k of Object.keys(imported)){\n      if(k==='info')continue;\n      if(Array.isArray(imported[k]))state[k]=imported[k];\n      else if(imported[k]&&typeof imported[k]==='object')state[k]={...state[k],...imported[k]};\n      else state[k]=imported[k];\n    }\n    if(Array.isArray(imported.legacyOrders)){try{localStorage.setItem('los_orders_workspace',JSON.stringify(imported.legacyOrders))}catch(e){}}\n    if(Array.isArray(imported.legacyOrderHistory)){try{localStorage.setItem('los_orders_history',JSON.stringify(imported.legacyOrderHistory))}catch(e){}}\n    origPersist(false);\n    localStorage.setItem('losStudioCloudLastPullV1',row.updated_at);\n    if(window.renderAll)window.renderAll();\n    if(window.v75RenderAll)window.v75RenderAll();\n    try{syncLegacyOrdersFrame()}catch(e){}\n    setStatus('Automatically synced from cloud · '+new Date(row.updated_at).toLocaleString(),true);\n  }catch(e){console.warn('LOS automatic cloud pull',e)}\n};\nwindow.__losAutoCloudStart = function(){\n  if(window.__losAutoCloudTimer)return;\n  const tick=()=>{try{window.__losAutoCloudPull()}catch(e){}};\n  window.__losAutoCloudTimer=setInterval(tick,5000);\n  window.addEventListener('focus',tick);\n  document.addEventListener('visibilitychange',()=>{if(!document.hidden)tick()});\n  setTimeout(tick,800);\n};\nsetTimeout(()=>{try{window.__losAutoCloudStart()}catch(e){}},1500);\n'''
+          s=s.replace(marker,auto+"\n"+marker,1)
+          p.write_text(s,encoding="utf-8")
+          PY
+
           # Refresh the embedded Orders workspace immediately after a cloud pull.
           python3 - <<'PY'
           from pathlib import Path
