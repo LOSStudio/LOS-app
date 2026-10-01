@@ -56,10 +56,13 @@ old_serial = "  function serialisableState(){return JSON.parse(JSON.stringify(st
 new_serial = """  function serialisableState(){
     const out=JSON.parse(JSON.stringify(state));
     try{
-      const savedOrders=localStorage.getItem('los_orders_workspace');
-      const savedHistory=localStorage.getItem('los_orders_history');
+      const savedOrders=localStorage.getItem('los_orders_workspace')||localStorage.getItem('los_orders');
+      const savedHistory=localStorage.getItem('los_orders_history')||localStorage.getItem('los_history');
       if(savedOrders)out.legacyOrders=JSON.parse(savedOrders);
       if(savedHistory)out.legacyOrderHistory=JSON.parse(savedHistory);
+      const cloudKeys=['losStudioBlueprintV1','los_business_profile','los_inventory','los_packaging','los_history','los_orders','los_orders_workspace','los_orders_history','los_db_customers','los_db_purchases','los_db_adjustments','los_hmrc_expenses_ledger'];
+      out.localStorageData={};
+      for(const key of cloudKeys){try{const value=localStorage.getItem(key);if(value!==null)out.localStorageData[key]=value}catch(e){}}
     }catch(e){console.warn('Legacy Orders cloud snapshot:',e)}
     return out;
   }"""
@@ -77,6 +80,15 @@ new_pull = """      state={...state,...imported,info:{...state.info,...(imported
       if(Array.isArray(imported.legacyOrderHistory)){
         state.legacyOrderHistory=imported.legacyOrderHistory;
         try{localStorage.setItem('los_orders_history',JSON.stringify(imported.legacyOrderHistory))}catch(e){}
+      }
+      if(imported.localStorageData&&typeof imported.localStorageData==='object'){
+        for(const [key,value] of Object.entries(imported.localStorageData)){
+          try{localStorage.setItem(key,String(value))}catch(e){}
+        }
+        try{
+          const raw=localStorage.getItem('losStudioBlueprintV1');
+          if(raw){const parsed=JSON.parse(raw);state={...state,...parsed,info:{...state.info,...(parsed.info||{})}}}
+        }catch(e){}
       }
       for(const k of ['inventory','orders','orderSummaries','legacyOrders','legacyOrderHistory','projects'"""
 if old_pull not in s:
