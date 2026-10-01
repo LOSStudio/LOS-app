@@ -44,7 +44,11 @@ jobs:
             mv "$tmp" site
           fi
 
-          if [ ! -f site/index.html ]; then
+          # The ZIP contains both the clean V75 app file and an older index.html.
+          # Always use the V75 app file as the page entry point.
+          if [ -f site/LOS_Studio_Acode_v75.html ]; then
+            cp site/LOS_Studio_Acode_v75.html site/index.html
+          elif [ ! -f site/index.html ]; then
             html_file="$(find site -maxdepth 2 -type f -iname '*.html' | head -n 1 || true)"
             if [ -n "$html_file" ]; then
               cp "$html_file" site/index.html
