@@ -108,10 +108,10 @@ public class MainActivity extends Activity {
                             StringBuilder out = new StringBuilder();
                             String line;
                             while ((line = reader.readLine()) != null) {
-                                out.append(line).append('\\n');
+                                out.append(line).append('\n');
                             }
                             responseBody = out.toString();
-                            if (responseBody.endsWith("\\n")) {
+                            if (responseBody.endsWith("\n")) {
                                 responseBody = responseBody.substring(0, responseBody.length() - 1);
                             }
                         }
