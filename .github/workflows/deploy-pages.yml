@@ -55,6 +55,10 @@ jobs:
               s += "\n" + tag + "\n"
           p.write_text(s,encoding="utf-8")
           PY
+          echo "=== V75 SYNC INTERNALS ==="
+          grep -nE 'losCloud|serialisableState|persist.*State|supabase|Pull Cloud|Sync Now|AUTO-SYNC' site/LOS_Studio_Acode_v75.html | head -n 300 || true
+          echo "=== FUNCTION DECLARATIONS ==="
+          grep -nE '^[[:space:]]*(async[[:space:]]+)?function[[:space:]]+(losCloud|serialisable|persist|pull|push|sync)' site/LOS_Studio_Acode_v75.html | head -n 200 || true
           echo "V75 SOURCE UNTOUCHED; SHADOW SYNC LAYER INJECTED"
           wc -c site/LOS_Studio_Acode_v75.html site/index.html site/shadow-sync.js
       - name: Configure Pages
