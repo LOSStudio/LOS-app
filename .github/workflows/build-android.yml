@@ -58,33 +58,37 @@ jobs:
           BUILD_TOOLS="$ANDROID_HOME/build-tools/35.0.0"
           printf '%s' "$KEYSTORE_B64" | base64 --decode > /tmp/losstudio-release.keystore
           printf '%s' "$KEYSTORE_PASSWORD" > /tmp/keystore-password.txt
-          "$BUILD_TOOLS/zipalign" -f 4 android/app/build/outputs/apk/release/app-release-unsigned.apk /tmp/losstudio-aligned.apk
 
-          SIGNED=""
-          for ENC in utf-8 ibm437 cp1252 iso-8859-1; do
-            rm -f android/app/build/outputs/apk/release/LOS-Studio.apk
-            if "$BUILD_TOOLS/apksigner" sign \
-              --ks /tmp/losstudio-release.keystore \
-              --ks-key-alias losstudio \
-              --ks-pass file:/tmp/keystore-password.txt \
-              --key-pass file:/tmp/keystore-password.txt \
-              --pass-encoding "$ENC" \
-              --v1-signing-enabled true \
-              --v2-signing-enabled true \
-              --v3-signing-enabled true \
-              --v4-signing-enabled false \
-              --out android/app/build/outputs/apk/release/LOS-Studio.apk \
-              /tmp/losstudio-aligned.apk >/tmp/apksigner.log 2>&1; then
-              echo "Signing succeeded using password encoding: $ENC"
-              SIGNED="yes"
-              break
-            fi
-          done
-
-          if [ -z "$SIGNED" ]; then
-            echo "Signing failed with all supported password encodings."
+          echo "Checking the registered LOS Studio signing key..."
+          KEYTOOL_OUTPUT="$(keytool -list -v -keystore /tmp/losstudio-release.keystore -storepass "$KEYSTORE_PASSWORD" 2>/tmp/keytool-error.log || true)"
+          if [ -z "$KEYTOOL_OUTPUT" ]; then
+            echo "The keystore password could not unlock the signing key."
+            cat /tmp/keytool-error.log
             exit 1
           fi
+
+          KEY_ALIAS="$(printf '%s\n' "$KEYTOOL_OUTPUT" | sed -n 's/^Alias name: //p' | head -n 1)"
+          if [ -z "$KEY_ALIAS" ]; then
+            echo "Could not determine the signing-key alias from the keystore."
+            exit 1
+          fi
+          echo "Signing-key alias detected successfully."
+
+          "$BUILD_TOOLS/zipalign" -f 4 android/app/build/outputs/apk/release/app-release-unsigned.apk /tmp/losstudio-aligned.apk
+
+          rm -f android/app/build/outputs/apk/release/LOS-Studio.apk
+          "$BUILD_TOOLS/apksigner" sign \
+            --ks /tmp/losstudio-release.keystore \
+            --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass file:/tmp/keystore-password.txt \
+            --key-pass file:/tmp/keystore-password.txt \
+            --pass-encoding utf-8 \
+            --v1-signing-enabled true \
+            --v2-signing-enabled true \
+            --v3-signing-enabled true \
+            --v4-signing-enabled false \
+            --out android/app/build/outputs/apk/release/LOS-Studio.apk \
+            /tmp/losstudio-aligned.apk
 
           "$BUILD_TOOLS/apksigner" verify --verbose android/app/build/outputs/apk/release/LOS-Studio.apk
       - name: Publish APK release
