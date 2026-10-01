@@ -1,5 +1,5 @@
 name: Deploy LOS Studio
-# cloud-sync-refresh-2026-10-01c
+# restored-working-baseline-2026-10-01
 
 on:
   push:
