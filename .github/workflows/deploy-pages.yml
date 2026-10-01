@@ -1,0 +1,109 @@
+name: Deploy LOS Studio
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'LOS_Studio_V75_icon_fixed.zip'
+      - 'manifest.webmanifest'
+      - 'sw.js'
+      - '.github/workflows/deploy-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare site
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf site
+          mkdir -p site
+          unzip -q "LOS_Studio_V75_icon_fixed.zip" -d site
+
+          # Flatten a single top-level directory if the ZIP has one.
+          shopt -s dotglob
+          entries=(site/*)
+          if [ "${#entries[@]}" -eq 1 ] && [ -d "${entries[0]}" ]; then
+            tmp="site_flat"
+            mkdir "$tmp"
+            cp -a "${entries[0]}"/. "$tmp"/
+            rm -rf site
+            mv "$tmp" site
+          fi
+
+          # Make the main LOS Studio HTML file the site's index.html.
+          if [ ! -f site/index.html ]; then
+            html_file="$(find site -maxdepth 2 -type f -iname '*.html' | head -n 1 || true)"
+            if [ -n "$html_file" ]; then
+              cp "$html_file" site/index.html
+            else
+              echo "No HTML app file found in the ZIP."
+              exit 1
+            fi
+          fi
+
+          # Use the repo's PWA files at the site root.
+          cp manifest.webmanifest site/manifest.webmanifest
+          cp sw.js site/sw.js
+
+          # Ensure the HTML references the PWA manifest and registers the service worker.
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("site/index.html")
+          s = p.read_text(encoding="utf-8", errors="ignore")
+
+          if 'rel="manifest"' not in s and "rel='manifest'" not in s:
+              marker = "</head>"
+              inject = '<link rel="manifest" href="./manifest.webmanifest">\n<meta name="theme-color" content="#ffffff">\n'
+              s = s.replace(marker, inject + marker, 1)
+
+          if "navigator.serviceWorker.register" not in s:
+              marker = "</body>"
+              inject = '''<script>
+          if ("serviceWorker" in navigator) {
+            window.addEventListener("load", () => {
+              navigator.serviceWorker.register("./sw.js").catch(() => {});
+            });
+          }
+          </script>
+          '''
+              s = s.replace(marker, inject + marker, 1)
+
+          p.write_text(s, encoding="utf-8")
+          PY
+
+          echo "Deployed files:"
+          find site -maxdepth 2 -type f -printf '%p %s bytes\n' | sort
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
