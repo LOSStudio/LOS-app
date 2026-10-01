@@ -57,19 +57,23 @@ jobs:
           cp manifest.webmanifest site/manifest.webmanifest
           cp sw.js site/sw.js
 
-          # Fix a literal </script> inside an app-generated HTML template literal.
-          # Browsers otherwise terminate the outer script and render following JS as text.
+          # Escape closing script tags that occur inside the application's
+          # JavaScript template literals. A raw </script> inside a JS string
+          # still terminates the surrounding HTML script element in a browser.
           python3 - <<'PY'
           from pathlib import Path
           p = Path("site/index.html")
           s = p.read_text(encoding="utf-8", errors="ignore")
-          replacements = {
-              "</script>\\n</body></html>`": "<\\/script>\\n</body></html>`",
-              "</script>setTimeout(()=>window.print(),400)<\\/script><script>": "<\\/script>setTimeout(()=>window.print(),400)<\\/script><script>"
-          }
-          for bad, good in replacements.items():
-              if bad in s:
-                  s = s.replace(bad, good, 1)
+
+          marker = "function printInventoryActivity(){"
+          start = s.find(marker)
+          if start != -1:
+              end = s.find("</script>\\n</body>", start)
+              if end != -1:
+                  block = s[start:end]
+                  block = block.replace("</script>", "<\\\\/script>")
+                  s = s[:start] + block + s[end:]
+
           p.write_text(s, encoding="utf-8")
           PY
 
