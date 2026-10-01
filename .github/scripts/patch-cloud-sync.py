@@ -186,5 +186,57 @@ s += """
 })();
 </script>
 """
+s += """
+<script>
+(function(){
+  if(!window.AndroidSupabase || typeof window.AndroidSupabase.request!=='function') return;
+  const browserFetch=window.fetch.bind(window);
+  const isSupabaseUrl=url=>/^https:\/\/[a-z0-9-]+\.supabase\.co\//i.test(url);
+  const nativeFetch=async function(input,init){
+    const source=input instanceof Request?input:null;
+    const url=typeof input==='string'?input:String(input&&input.url||'');
+    if(!isSupabaseUrl(url))return browserFetch(input,init);
+    const opts=init||{};
+    const headers=new Headers(opts.headers||(source?source.headers:undefined));
+    let body=opts.body;
+    if(body===undefined&&source)body=await source.clone().text();
+    const payload={
+      method:String(opts.method||(source?source.method:'GET')).toUpperCase(),
+      headers:Object.fromEntries(headers.entries()),
+      body:body==null?'':(typeof body==='string'?body:String(body))
+    };
+    let raw;
+    try{raw=window.AndroidSupabase.request(url,JSON.stringify(payload));}
+    catch(e){throw new TypeError('Native Supabase request failed: '+e.message);}
+    let result;
+    try{result=JSON.parse(raw);}
+    catch(e){throw new TypeError('Native Supabase bridge returned invalid data');}
+    if(result.error)throw new TypeError(result.error);
+    return new Response(result.body||'',{
+      status:Number(result.status)||200,
+      statusText:result.statusText||'',
+      headers:result.headers||{}
+    });
+  };
+  function wrap(){
+    if(!window.supabase || typeof window.supabase.createClient!=='function') return false;
+    if(window.supabase.createClient.__losNativeWrapped) return true;
+    const original=window.supabase.createClient;
+    function createClient(url,key,options){
+      const opts=options||{};
+      const globalOpts=opts.global||{};
+      return original(url,key,{...opts,global:{...globalOpts,fetch:nativeFetch}});
+    }
+    createClient.__losNativeWrapped=true;
+    window.supabase.createClient=createClient;
+    return true;
+  }
+  if(!wrap()){
+    let tries=0;
+    const timer=setInterval(()=>{if(wrap()||++tries>100)clearInterval(timer)},100);
+  }
+})();
+</script>
+"""
 p.write_text(s, encoding="utf-8")
 print("Cloud sync patch applied to site/index.html")
