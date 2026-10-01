@@ -103,6 +103,26 @@ if old_pull not in s:
     raise SystemExit("FATAL: cloud pull state block not found")
 s = s.replace(old_pull, new_pull, 1)
 
+old_new_order = """function legacyNewOrder(){
+  initLegacyOrdersFrame();
+  const action={type:'LOS_V1533_NEW_ORDER'};
+  if(!legacyOrdersReady){pendingLegacyOrderAction=action;return}
+  sendLegacyOrderAction(action);
+}"""
+new_new_order = """async function legacyNewOrder(){
+  initLegacyOrdersFrame();
+  const action={type:'LOS_V1533_NEW_ORDER'};
+  if(!legacyOrdersReady){pendingLegacyOrderAction=action;return}
+  // Ensure the iframe has the latest parent/cloud order list before creating
+  // a new order, preventing a cloud-pulled order from disappearing due to
+  // stale iframe state.
+  await syncLegacyOrdersFrame();
+  sendLegacyOrderAction(action);
+}"""
+if old_new_order not in s:
+    raise SystemExit("FATAL: legacyNewOrder source block not found")
+s = s.replace(old_new_order, new_new_order, 1)
+
 m = re.search(r"const LEGACY_ORDERS_HTML_B64\s*=\s*['\"]([^'\"]+)", s)
 if not m:
     raise SystemExit("FATAL: embedded legacy Orders base64 not found")
