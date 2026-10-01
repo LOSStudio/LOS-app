@@ -9,6 +9,7 @@ on:
       - 'manifest.webmanifest'
       - 'sw.js'
       - '.github/workflows/deploy-pages.yml'
+      - '.github/scripts/patch-cloud-sync.py'
   workflow_dispatch:
 
 permissions:
