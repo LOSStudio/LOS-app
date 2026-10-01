@@ -1,0 +1,74 @@
+name: Build LOS Studio Android
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "android/**"
+      - "LOS_Studio_V75_icon_fixed.zip"
+      - ".github/workflows/build-android.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Extract exact LOS Studio icon
+        shell: bash
+        run: |
+          mkdir -p /tmp/los-source
+          unzip -q "LOS_Studio_V75_icon_fixed.zip" -d /tmp/los-source
+          python3 - <<'PY'
+          import base64, re, pathlib
+          candidates = list(pathlib.Path("/tmp/los-source").rglob("LOS_Studio_Acode_v75.html"))
+          if not candidates:
+              raise SystemExit("LOS Studio V75 HTML not found in ZIP")
+          html = candidates[0].read_text(encoding="utf-8", errors="ignore")
+          m = re.search(r'data:image/png;base64,([A-Za-z0-9+/=]+)', html)
+          if not m:
+              raise SystemExit("Embedded LOS Studio PNG icon not found")
+          out = pathlib.Path("android/app/src/main/res/drawable-nodpi/los_studio_icon.png")
+          out.parent.mkdir(parents=True, exist_ok=True)
+          out.write_bytes(base64.b64decode(m.group(1)))
+          print("Wrote", out, "bytes", out.stat().st_size)
+          PY
+
+      - name: Download Gradle
+        run: |
+          curl -L --fail --retry 3             https://services.gradle.org/distributions/gradle-8.9-bin.zip             -o /tmp/gradle.zip
+          unzip -q /tmp/gradle.zip -d /tmp
+
+      - name: Build signed debug APK
+        run: |
+          /tmp/gradle-8.9/bin/gradle :app:assembleDebug --no-daemon
+          ls -lh android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Publish APK release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-v${{ github.run_number }}
+          name: LOS Studio Android ${{ github.run_number }}
+          body: |
+            LOS Studio Android test build.
+            This APK opens the live LOS Studio app directly, with the LOS Studio name and icon.
+          files: android/app/build/outputs/apk/debug/app-debug.apk
+          generate_release_notes: false
