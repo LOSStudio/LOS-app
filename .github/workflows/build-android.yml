@@ -89,6 +89,10 @@ jobs:
             --ks-key-alias losstudio \
             --ks-pass pass:losstudio-test \
             --key-pass pass:losstudio-test \
+            --v1-signing-enabled true \
+            --v2-signing-enabled true \
+            --v3-signing-enabled true \
+            --v4-signing-enabled false \
             --out android/app/build/outputs/apk/release/LOS-Studio.apk \
             /tmp/losstudio-aligned.apk
           "$BUILD_TOOLS/apksigner" verify --verbose android/app/build/outputs/apk/release/LOS-Studio.apk
