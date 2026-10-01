@@ -51,8 +51,7 @@ jobs:
           PY
           cp site/icon-512.png site/icon-192.png
           cmp -s site/LOS_Studio_Acode_v75.html site/index.html
-          python3 .github/scripts/patch-cloud-sync.py
-          echo "V75 DEPLOYMENT + ISOLATED CLOUD SYNC - STABLE ORDERS"
+          echo "CLEAN V75 DEPLOYMENT"
           wc -c site/LOS_Studio_Acode_v75.html site/index.html
       - name: Configure Pages
         uses: actions/configure-pages@v5
