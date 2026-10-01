@@ -57,6 +57,18 @@ jobs:
           cp manifest.webmanifest site/manifest.webmanifest
           cp sw.js site/sw.js
 
+          # Fix a literal </script> inside an app-generated HTML template literal.
+          # Browsers otherwise terminate the outer script and render following JS as text.
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("site/index.html")
+          s = p.read_text(encoding="utf-8", errors="ignore")
+          bad = "</script>\\n</body></html>`"
+          good = "<\\/script>\\n</body></html>`"
+          if bad in s:
+              p.write_text(s.replace(bad, good, 1), encoding="utf-8")
+          PY
+
           python3 - <<'PY'
           from pathlib import Path
           p = Path("site/index.html")
