@@ -70,6 +70,21 @@ jobs:
           # Keep the embedded legacy Orders workspace in the same cloud-backed state.
           python3 .github/scripts/patch-cloud-sync.py
 
+          # Android WebView transport: install a fetch shim before the app scripts run.
+          # Browser/Chromebook builds keep the normal Fetch API; Android uses the native
+          # Supabase bridge to avoid WebView cross-origin/network failures.
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path("site/index.html")
+          s=p.read_text(encoding="utf-8",errors="ignore")
+          bridge="<script>\n(function(){\n  const nativeBridge=window.AndroidSupabase;\n  if(!nativeBridge||typeof nativeBridge.request!=='function')return;\n  const browserFetch=window.fetch.bind(window);\n  const isSupabaseUrl=url=>/^https:\\/\\/[a-z0-9-]+\\.supabase\\.co\\//i.test(url);\n  window.fetch=async function(input,init){\n    const source=input instanceof Request?input:null;\n    const url=typeof input==='string'?input:String(input&&input.url||'');\n    if(!isSupabaseUrl(url))return browserFetch(input,init);\n    const opts=init||{};\n    const headers=new Headers(opts.headers||(source?source.headers:undefined));\n    let body=opts.body;\n    if(body===undefined&&source)body=await source.clone().text();\n    const payload={\n      method:String(opts.method||(source?source.method:'GET')).toUpperCase(),\n      headers:Object.fromEntries(headers.entries()),\n      body:body==null?'':(typeof body==='string'?body:String(body))\n    };\n    let raw;\n    try{raw=nativeBridge.request(url,JSON.stringify(payload));}\n    catch(e){throw new TypeError('Native Supabase request failed: '+e.message);}\n    let result;\n    try{result=JSON.parse(raw);}\n    catch(e){throw new TypeError('Native Supabase bridge returned invalid data');}\n    if(result.error)throw new TypeError(result.error);\n    return new Response(result.body||'',{\n      status:Number(result.status)||200,\n      statusText:result.statusText||'',\n      headers:result.headers||{}\n    });\n  };\n})();\n</script>"
+          if "window.AndroidSupabase" not in s:
+              if "<head>" not in s:
+                  raise SystemExit("FATAL: <head> not found")
+              s=s.replace("<head>","<head>\n"+bridge,1)
+              p.write_text(s,encoding="utf-8")
+          PY
+
           # Make cloud sync truly automatic: pull newer data from the same cloud account
           # in the background on every open/focus and every 5 seconds. No manual Pull button
           # and no confirmation prompt are required for normal cross-device sync.
