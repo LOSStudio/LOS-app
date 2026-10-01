@@ -240,3 +240,22 @@ s += """
 """
 p.write_text(s, encoding="utf-8")
 print("Cloud sync patch applied to site/index.html")
+
+<script>
+(function(){
+  const originalSetItem=Storage.prototype.setItem;
+  Storage.prototype.setItem=function(key,value){
+    try{
+      return originalSetItem.call(this,key,value);
+    }catch(e){
+      const message=String(e&&e.message||e);
+      const quota=/quota|exceed/i.test(message)||e&&e.name==='QuotaExceededError';
+      if(quota && key==='losStudioBlueprintV1' && String(value||'').length>4000000){
+        console.warn('LOS Studio: skipped oversized blueprint localStorage write; cloud data remains in memory.');
+        return;
+      }
+      throw e;
+    }
+  };
+})();
+</script>
