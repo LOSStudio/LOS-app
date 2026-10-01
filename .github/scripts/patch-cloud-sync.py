@@ -249,8 +249,23 @@ s += """
     }catch(e){
       const message=String(e&&e.message||e);
       const quota=/quota|exceed/i.test(message)||e&&e.name==='QuotaExceededError';
-      if(quota && key==='losStudioBlueprintV1' && String(value||'').length>4000000){
-        console.warn('LOS Studio: skipped oversized blueprint localStorage write; cloud data remains in memory.');
+      if(!quota) throw e;
+      // A large cloud blueprint can consume nearly the entire Chromebook
+      // localStorage quota. Evict that redundant snapshot first, then retry
+      // the actual record being saved (orders, customers, etc.).
+      if(key!=='losStudioBlueprintV1'){
+        try{
+          const blueprint=localStorage.getItem('losStudioBlueprintV1');
+          if(blueprint && blueprint.length>3000000){
+            localStorage.removeItem('losStudioBlueprintV1');
+            return originalSetItem.call(this,key,value);
+          }
+        }catch(retryError){
+          console.warn('LOS Studio: storage quota remains full after blueprint eviction.',retryError);
+        }
+      }
+      if(key==='losStudioBlueprintV1'){
+        console.warn('LOS Studio: skipped oversized blueprint localStorage snapshot; cloud copy remains authoritative.');
         return;
       }
       throw e;
