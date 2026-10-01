@@ -15,85 +15,57 @@ permissions:
 jobs:
   build-android:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Java 17
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
-
       - name: Prepare Android SDK
         shell: bash
         run: |
           export ANDROID_HOME=/usr/local/lib/android/sdk
-          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
-
       - name: Extract exact LOS Studio icon
         shell: bash
         run: |
           mkdir -p /tmp/los-source
           unzip -q "LOS_Studio_V75_icon_fixed.zip" -d /tmp/los-source
           python3 - <<'PY'
-          import base64, re, pathlib
-          candidates = list(pathlib.Path("/tmp/los-source").rglob("LOS_Studio_Acode_v75.html"))
-          if not candidates:
-              raise SystemExit("LOS Studio V75 HTML not found in ZIP")
-          html = candidates[0].read_text(encoding="utf-8", errors="ignore")
-          m = re.search(r'data:image/png;base64,([A-Za-z0-9+/=]+)', html)
-          if not m:
-              raise SystemExit("Embedded LOS Studio PNG icon not found")
-          out = pathlib.Path("android/app/src/main/res/drawable-nodpi/los_studio_icon.png")
-          out.parent.mkdir(parents=True, exist_ok=True)
-          out.write_bytes(base64.b64decode(m.group(1)))
-          print("Wrote", out, "bytes", out.stat().st_size)
+          import base64,re,pathlib
+          html=next(pathlib.Path("/tmp/los-source").rglob("LOS_Studio_Acode_v75.html")).read_text(encoding="utf-8",errors="ignore")
+          m=re.search(r'data:image/png;base64,([A-Za-z0-9+/=]+)',html)
+          if not m: raise SystemExit("Icon not found")
+          p=pathlib.Path("android/app/src/main/res/drawable-nodpi/los_studio_icon.png")
+          p.parent.mkdir(parents=True,exist_ok=True)
+          p.write_bytes(base64.b64decode(m.group(1)))
           PY
-
-      - name: Download Gradle
-        run: |
-          curl -L --fail --retry 3 https://services.gradle.org/distributions/gradle-8.9-bin.zip -o /tmp/gradle.zip
-          unzip -q /tmp/gradle.zip -d /tmp
-
       - name: Build release APK
         shell: bash
         run: |
+          curl -L --fail --retry 3 https://services.gradle.org/distributions/gradle-8.9-bin.zip -o /tmp/gradle.zip
+          unzip -q /tmp/gradle.zip -d /tmp
           cd android
           /tmp/gradle-8.9/bin/gradle :app:assembleRelease --no-daemon
-          ls -lh app/build/outputs/apk/release/app-release-unsigned.apk
-
-      - name: Sign and align release APK with LOS Studio registered key
+      - name: Sign and align release APK
         shell: bash
         env:
-          LOS_STUDIO_KEYSTORE_B64: ${{ secrets.LOS_STUDIO_KEYSTORE_B64 }}
-          LOS_STUDIO_KEYSTORE_PASSWORD: ${{ secrets.LOS_STUDIO_KEYSTORE_PASSWORD }}
+          KEYSTORE_B64: ${{ secrets.LOS_STUDIO_KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.LOS_STUDIO_KEYSTORE_PASSWORD }}
         run: |
           set -euo pipefail
           export ANDROID_HOME=/usr/local/lib/android/sdk
           BUILD_TOOLS="$ANDROID_HOME/build-tools/35.0.0"
-          test -n "$LOS_STUDIO_KEYSTORE_B64" || { echo "Missing LOS_STUDIO_KEYSTORE_B64"; exit 1; }
-          test -n "$LOS_STUDIO_KEYSTORE_PASSWORD" || { echo "Missing LOS_STUDIO_KEYSTORE_PASSWORD"; exit 1; }
-          printf '%s' "$LOS_STUDIO_KEYSTORE_B64" | base64 --decode > /tmp/losstudio-release.keystore
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > /tmp/losstudio-release.keystore
+          printf '%s' "$KEYSTORE_PASSWORD" > /tmp/keystore-password.txt
           "$BUILD_TOOLS/zipalign" -f 4 android/app/build/outputs/apk/release/app-release-unsigned.apk /tmp/losstudio-aligned.apk
-          "$BUILD_TOOLS/apksigner" sign             --ks /tmp/losstudio-release.keystore             --ks-key-alias losstudio             --ks-pass env:LOS_STUDIO_KEYSTORE_PASSWORD             --key-pass env:LOS_STUDIO_KEYSTORE_PASSWORD             --v1-signing-enabled true             --v2-signing-enabled true             --v3-signing-enabled true             --v4-signing-enabled false             --out android/app/build/outputs/apk/release/LOS-Studio.apk             /tmp/losstudio-aligned.apk
+          "$BUILD_TOOLS/apksigner" sign             --ks /tmp/losstudio-release.keystore             --ks-key-alias losstudio             --ks-pass file:/tmp/keystore-password.txt             --key-pass file:/tmp/keystore-password.txt             --v1-signing-enabled true             --v2-signing-enabled true             --v3-signing-enabled true             --v4-signing-enabled false             --out android/app/build/outputs/apk/release/LOS-Studio.apk             /tmp/losstudio-aligned.apk
           "$BUILD_TOOLS/apksigner" verify --verbose android/app/build/outputs/apk/release/LOS-Studio.apk
-          "$BUILD_TOOLS/apksigner" verify --print-certs android/app/build/outputs/apk/release/LOS-Studio.apk
-          ls -lh android/app/build/outputs/apk/release/LOS-Studio.apk
-
       - name: Publish APK release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: android-v${{ github.run_number }}
           name: LOS Studio Android ${{ github.run_number }}
-          body: |
-            LOS Studio Android test build.
-            This is a signed release APK for direct device testing.
-            It opens the live LOS Studio app directly, with the LOS Studio name and icon.
+          body: Signed LOS Studio Android test build.
           files: android/app/build/outputs/apk/release/LOS-Studio.apk
           generate_release_notes: false
-
-# Triggered automatically after the signing secrets were added.
