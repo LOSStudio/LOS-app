@@ -86,17 +86,37 @@ jobs:
           convert site/icon-512.png -resize 192x192 site/icon-192.png
           file site/icon-192.png site/icon-512.png
 
-          # Force a clean, browser-compatible PWA header every build.
-          # Replace any older manifest reference so Samsung/Chrome cannot retain stale metadata.
+          # Force a Samsung/Chrome-compatible manifest directly into the page.
+          # Samsung Internet has documented support for data: application manifests;
+          # using an inline manifest avoids stale/MIME/path handling differences on Android.
           python3 - <<'PY'
           from pathlib import Path
-          import re
+          import re, json, urllib.parse
           p = Path("site/index.html")
           s = p.read_text(encoding="utf-8", errors="ignore")
           if "<head>" not in s:
               raise SystemExit("FATAL: <head> not found")
           s = re.sub(r'<link[^>]+rel=["\']manifest["\'][^>]*>\s*', '', s, flags=re.I)
-          injection = '''<link rel="manifest" href="/LOS-app/manifest.webmanifest">
+          manifest = {
+              "id": "/LOS-app/",
+              "name": "LOS Studio",
+              "short_name": "LOS Studio",
+              "description": "LOS Studio business management app",
+              "start_url": "https://losstudio.github.io/LOS-app/",
+              "scope": "https://losstudio.github.io/LOS-app/",
+              "display": "standalone",
+              "display_override": ["standalone", "minimal-ui"],
+              "background_color": "#ffffff",
+              "theme_color": "#ffffff",
+              "icons": [
+                  {"src":"https://losstudio.github.io/LOS-app/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
+                  {"src":"https://losstudio.github.io/LOS-app/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any"},
+                  {"src":"https://losstudio.github.io/LOS-app/icon-192.png","sizes":"192x192","type":"image/png","purpose":"maskable"},
+                  {"src":"https://losstudio.github.io/LOS-app/icon-512.png","sizes":"512x512","type":"image/png","purpose":"maskable"}
+              ]
+          }
+          data_url = "data:application/manifest+json," + urllib.parse.quote(json.dumps(manifest, separators=(",",":")))
+          injection = f'''<link rel="manifest" href="{data_url}">
           <link rel="icon" type="image/png" sizes="192x192" href="/LOS-app/icon-192.png">
           <link rel="icon" type="image/png" sizes="512x512" href="/LOS-app/icon-512.png">
           <link rel="apple-touch-icon" sizes="192x192" href="/LOS-app/icon-192.png">
