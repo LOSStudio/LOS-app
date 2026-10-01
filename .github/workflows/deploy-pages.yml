@@ -6,7 +6,6 @@ on:
       - 'LOS_Studio_V75_icon_fixed.zip'
       - 'manifest.webmanifest'
       - 'sw.js'
-      - 'shadow-sync.js'
       - '.github/workflows/deploy-pages.yml'
   workflow_dispatch:
 permissions:
@@ -42,17 +41,123 @@ jobs:
           cp site/LOS_Studio_Acode_v75.html site/index.html
           cp manifest.webmanifest site/manifest.webmanifest
           cp sw.js site/sw.js
-          cp shadow-sync.js site/shadow-sync.js
-          python3 - <<'PY'
-          from pathlib import Path
-          import re, base64
-          html=Path("site/LOS_Studio_Acode_v75.html").read_text(encoding="utf-8",errors="ignore")
-          m=re.search(r'data:image/png;base64,([A-Za-z0-9+/=]+)',html)
-          if not m: raise SystemExit("V75 embedded logo not found")
-          Path("site/icon-512.png").write_bytes(base64.b64decode(m.group(1)))
-          PY
-          cp site/icon-512.png site/icon-192.png
-          cmp -s site/LOS_Studio_Acode_v75.html site/index.html
+          cat > site/shadow-sync.js <<'EOF'
+(function(){
+'use strict';
+if(window.__LOS_SHADOW_SYNC__)return;
+window.__LOS_SHADOW_SYNC__=true;
+const TABLE='app_sync';
+let client=null,channel=null,timer=null,remoteApply=false,lastRemoteUpdatedAt='';
+function readConfig(){
+ let url='',key='';
+ for(const k of ['los_supabase_url','los_supabase_key','losCloudSupabaseUrl','losCloudSupabaseKey']){
+  const v=localStorage.getItem(k)||'';
+  if(!url&&/url/i.test(k))url=v;
+  if(!key&&/key/i.test(k))key=v;
+ }
+ if(!url||!key)for(const el of document.querySelectorAll('input')){
+  const v=String(el.value||'').trim();
+  if(!url&&/^https:\/\/[^/]+\.supabase\.co\/?$/i.test(v))url=v;
+  if(!key&&/^sb_(publishable|anon)_/i.test(v))key=v;
+ }
+ return {url:url.trim().replace(/\/$/,''),key:key.trim()};
+}
+function snapshot(){
+ const data={};
+ for(let i=0;i<localStorage.length;i++){
+  const k=localStorage.key(i);
+  if(!k||/supabase.*key/i.test(k))continue;
+  try{data[k]=localStorage.getItem(k)}catch(e){}
+ }
+ return {localStorageData:data};
+}
+function existingApply(){
+ for(const n of ['applyCloudData','applyRemoteCloudData','applyLocalData','loadCloudData','importCloudData'])
+  if(typeof window[n]==='function')return window[n];
+ return null;
+}
+async function applyRemote(payload){
+ if(!payload||typeof payload!=='object')return;
+ remoteApply=true;
+ try{
+  const fn=existingApply();
+  if(fn){await fn(payload);return}
+  const data=payload.localStorageData;
+  if(data&&typeof data==='object')for(const [k,v] of Object.entries(data)){
+   try{
+    const old=localStorage.getItem(k);
+    localStorage.setItem(k,String(v));
+    try{window.dispatchEvent(new StorageEvent('storage',{key:k,oldValue:old,newValue:String(v),storageArea:localStorage,url:location.href}))}catch(e){}
+   }catch(e){}
+  }
+ }catch(e){console.warn('[LOS shadow sync] remote apply failed silently',e)}
+ finally{remoteApply=false}
+}
+async function push(){
+ if(remoteApply||!client)return;
+ try{
+  const {data:{user},error:ue}=await client.auth.getUser();
+  if(ue||!user)return;
+  const {error}=await client.from(TABLE).upsert(
+   {user_id:user.id,data_payload:snapshot()},
+   {onConflict:'user_id'}
+  );
+  if(error)console.warn('[LOS shadow sync] push failed silently',error.message);
+ }catch(e){console.warn('[LOS shadow sync] push failed silently',e)}
+}
+function schedulePush(){
+ if(remoteApply)return;
+ clearTimeout(timer);
+ timer=setTimeout(()=>void push(),700);
+}
+function installObserver(){
+ const proto=Storage.prototype;
+ if(proto.__losShadowWrapped)return;
+ const set=proto.setItem,remove=proto.removeItem,clear=proto.clear;
+ proto.__losShadowWrapped=true;
+ proto.setItem=function(k,v){const r=set.call(this,k,v);if(this===localStorage&&!remoteApply)schedulePush();return r};
+ proto.removeItem=function(k){const r=remove.call(this,k);if(this===localStorage&&!remoteApply)schedulePush();return r};
+ proto.clear=function(){const r=clear.call(this);if(this===localStorage&&!remoteApply)schedulePush();return r};
+}
+function loadSupabase(){
+ return new Promise((resolve,reject)=>{
+  if(window.supabase&&typeof window.supabase.createClient==='function'){resolve();return}
+  const s=document.createElement('script');
+  s.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+  s.onload=resolve;s.onerror=reject;document.head.appendChild(s);
+ });
+}
+async function start(){
+ try{
+  const cfg=readConfig();
+  if(!cfg.url||!cfg.key)return;
+  await loadSupabase();
+  if(!window.supabase||typeof window.supabase.createClient!=='function')return;
+  client=window.supabase.createClient(cfg.url,cfg.key);
+  installObserver();
+  const {data:{user},error}=await client.auth.getUser();
+  if(error||!user)return;
+  channel=client.channel('los-shadow-sync-'+user.id)
+   .on('postgres_changes',{event:'*',schema:'public',table:TABLE,filter:'user_id=eq.'+user.id},
+    payload=>{
+     if(payload.eventType==='DELETE')return;
+     const row=payload.new||{};
+     if(row.updated_at&&row.updated_at===lastRemoteUpdatedAt)return;
+     lastRemoteUpdatedAt=row.updated_at||'';
+     void applyRemote(row.data_payload);
+    })
+   .subscribe();
+  await push();
+ }catch(e){console.warn('[LOS shadow sync] startup failed silently',e)}
+}
+window.LOSShadowSync={
+ start,push,
+ stop:async function(){try{if(channel&&client)await client.removeChannel(channel);channel=null}catch(e){}}
+};
+const boot=()=>setTimeout(()=>void start(),0);
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
+})();
+EOF
           python3 - <<'PY'
           from pathlib import Path
           p=Path("site/index.html")
