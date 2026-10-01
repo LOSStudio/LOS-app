@@ -1,4 +1,4 @@
-name: Inspect embedded Orders storage
+name: Inspect order bridge mapping
 on:
   push:
     branches: [main]
@@ -16,12 +16,13 @@ jobs:
           python3 - "$f" <<'PY'
           import sys,re,base64
           s=open(sys.argv[1],encoding='utf-8',errors='ignore').read()
-          m=re.search(r'LEGACY_ORDERS_HTML_B64\s*=\s*["\']([^"\']+)',s)
-          print("B64 FOUND",bool(m),"LEN",len(m.group(1)) if m else 0)
-          if m:
-            x=base64.b64decode(m.group(1)).decode('utf-8','ignore')
-            for p in ['localStorage','sessionStorage','postMessage','LOS_PARENT_TO_V1533','LOS_V1533_ORDER_SUMMARIES','LOS_V1533_ORDER_SAVE','save','persist']:
-              print("\n===",p,"===")
-              for z in list(re.finditer(p,x,re.I))[:15]:
-                print(x[max(0,z.start()-500):z.end()+1200].replace("\n"," ")[:1800])
+          x=base64.b64decode(re.search(r'LEGACY_ORDERS_HTML_B64\s*=\s*["\']([^"\']+)',s).group(1)).decode('utf-8','ignore')
+          for p in ['LOS_V1533_ORDER_SUMMARIES','LOS_V1533_SAVE','LOS_V1533_ORDER_STATE','LOS_V1533_TO_PARENT','LOS_PARENT_TO_V1533','window.parent.postMessage']:
+            print("\n===",p,"===")
+            for m in list(re.finditer(p,x,re.I))[:20]:
+              print(x[max(0,m.start()-1000):m.end()+1800].replace("\n"," ")[:3000])
+          print("\n=== PARENT MESSAGE HANDLERS ===")
+          for p in ['LOS_V1533_ORDER_SUMMARIES','LOS_V1533_ORDER_SAVED','LOS_V1533_ORDER_ARCHIVED','LOS_V1533_ORDER_DELETED']:
+            for m in list(re.finditer(p,s,re.I))[:10]:
+              print(s[max(0,m.start()-800):m.end()+2200].replace("\n"," ")[:3500])
           PY
