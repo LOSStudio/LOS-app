@@ -56,9 +56,14 @@ jobs:
           p=Path("site/index.html")
           s=p.read_text(encoding="utf-8")
           old="function serialisableState(){return JSON.parse(JSON.stringify(state))}"
-          new="function serialisableState(){const s=JSON.parse(JSON.stringify(state));if(s.info&&Object.prototype.hasOwnProperty.call(s.info,'logoData'))delete s.info.logoData;return s}"
+          new="function serialisableState(){const s=JSON.parse(JSON.stringify(state));if(s.info&&Object.prototype.hasOwnProperty.call(s.info,'logoData'))delete s.info.logoData;try{s._syncOrdersWorkspace=JSON.parse(localStorage.getItem('los_orders_workspace')||'null');s._syncOrdersHistory=JSON.parse(localStorage.getItem('los_orders_history')||'null')}catch(e){}return s}"
           if old not in s: raise SystemExit("Sync patch target not found")
-          p.write_text(s.replace(old,new,1),encoding="utf-8")
+          s=s.replace(old,new,1)
+          pull="const imported=row.state;if(!imported||typeof imported!=='object')throw new Error('Cloud record is empty or invalid.');"
+          pull_new="const imported=row.state;if(!imported||typeof imported!=='object')throw new Error('Cloud record is empty or invalid.');try{if(Array.isArray(imported._syncOrdersWorkspace))localStorage.setItem('los_orders_workspace',JSON.stringify(imported._syncOrdersWorkspace));if(Array.isArray(imported._syncOrdersHistory))localStorage.setItem('los_orders_history',JSON.stringify(imported._syncOrdersHistory))}catch(e){console.warn('Cloud Orders workspace restore skipped',e)}"
+          if pull not in s: raise SystemExit("Cloud pull target not found")
+          s=s.replace(pull,pull_new,1)
+          p.write_text(s,encoding="utf-8")
           PY
           echo "SYNC-ONLY PATCH: exclude large local logoData from cloud payload; keep local logo on pull"
           echo "CLEAN V75 DEPLOYMENT"
