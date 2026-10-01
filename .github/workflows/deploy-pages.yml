@@ -34,7 +34,6 @@ jobs:
           mkdir -p site
           unzip -q "LOS_Studio_V75_icon_fixed.zip" -d site
 
-          # Flatten a single top-level directory if the ZIP has one.
           shopt -s dotglob
           entries=(site/*)
           if [ "${#entries[@]}" -eq 1 ] && [ -d "${entries[0]}" ]; then
@@ -45,7 +44,6 @@ jobs:
             mv "$tmp" site
           fi
 
-          # Make the main LOS Studio HTML file the site's index.html.
           if [ ! -f site/index.html ]; then
             html_file="$(find site -maxdepth 2 -type f -iname '*.html' | head -n 1 || true)"
             if [ -n "$html_file" ]; then
@@ -56,32 +54,34 @@ jobs:
             fi
           fi
 
-          # Use the repo's PWA files at the site root.
           cp manifest.webmanifest site/manifest.webmanifest
           cp sw.js site/sw.js
 
-          # Ensure the HTML references the PWA manifest and registers the service worker.
           python3 - <<'PY'
           from pathlib import Path
           p = Path("site/index.html")
           s = p.read_text(encoding="utf-8", errors="ignore")
 
           if 'rel="manifest"' not in s and "rel='manifest'" not in s:
-              marker = "</head>"
-              inject = '<link rel="manifest" href="./manifest.webmanifest">\n<meta name="theme-color" content="#ffffff">\n'
-              s = s.replace(marker, inject + marker, 1)
+              s = s.replace(
+                  "</head>",
+                  '<link rel="manifest" href="./manifest.webmanifest">\n<meta name="theme-color" content="#ffffff">\n</head>',
+                  1
+              )
 
           if "navigator.serviceWorker.register" not in s:
-              marker = "</body>"
-              inject = '''<script>
+              s = s.replace(
+                  "</body>",
+                  '''<script>
           if ("serviceWorker" in navigator) {
             window.addEventListener("load", () => {
               navigator.serviceWorker.register("./sw.js").catch(() => {});
             });
           }
           </script>
-          '''
-              s = s.replace(marker, inject + marker, 1)
+          </body>''',
+                  1
+              )
 
           p.write_text(s, encoding="utf-8")
           PY
@@ -91,6 +91,8 @@ jobs:
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
