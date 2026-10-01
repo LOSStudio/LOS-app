@@ -1,4 +1,4 @@
-package com.losstudio.app;
+package com.losstudio.losstudio;
 
 import android.app.Activity;
 import android.content.Intent;
