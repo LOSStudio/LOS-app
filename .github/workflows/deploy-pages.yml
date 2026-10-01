@@ -1,6 +1,4 @@
 name: Deploy LOS Studio
-# restored-working-baseline-2026-10-01
-
 on:
   push:
     branches: [main]
@@ -9,33 +7,27 @@ on:
       - 'manifest.webmanifest'
       - 'sw.js'
       - '.github/workflows/deploy-pages.yml'
-      - '.github/scripts/patch-cloud-sync.py'
   workflow_dispatch:
-
 permissions:
   contents: read
   pages: write
   id-token: write
-
 concurrency:
   group: pages
   cancel-in-progress: true
-
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Prepare site
+      - name: Prepare clean V75 site
         shell: bash
         run: |
           set -euo pipefail
           rm -rf site
           mkdir -p site
           unzip -q "LOS_Studio_V75_icon_fixed.zip" -d site
-
           shopt -s dotglob
           entries=(site/*)
           if [ "${#entries[@]}" -eq 1 ] && [ -d "${entries[0]}" ]; then
@@ -45,176 +37,30 @@ jobs:
             rm -rf site
             mv "$tmp" site
           fi
-
-          # The ZIP contains both the clean V75 app file and an older index.html.
-          # Always use the V75 app file as the page entry point.
-          if [ -f site/LOS_Studio_Acode_v75.html ]; then
-            cp site/LOS_Studio_Acode_v75.html site/index.html
-          elif [ ! -f site/index.html ]; then
-            html_file="$(find site -maxdepth 2 -type f -iname '*.html' | head -n 1 || true)"
-            if [ -n "$html_file" ]; then
-              cp "$html_file" site/index.html
-            else
-              echo "No HTML app file found in the ZIP."
-              exit 1
-            fi
-          fi
-
-          rm -f site/index.html
+          test -f site/LOS_Studio_Acode_v75.html
           cp site/LOS_Studio_Acode_v75.html site/index.html
-          cmp -s site/LOS_Studio_Acode_v75.html site/index.html
-
           cp manifest.webmanifest site/manifest.webmanifest
           cp sw.js site/sw.js
-
-
-          # Keep the embedded legacy Orders workspace in the same cloud-backed state.
-          python3 .github/scripts/patch-cloud-sync.py
-
-          # Android WebView transport: install a fetch shim before the app scripts run.
-          # Browser/Chromebook builds keep the normal Fetch API; Android uses the native
-          # Supabase bridge to avoid WebView cross-origin/network failures.
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path("site/index.html")
-          s=p.read_text(encoding="utf-8",errors="ignore")
-          bridge="<script>\n(function(){\n  const nativeBridge=window.AndroidSupabase;\n  if(!nativeBridge||typeof nativeBridge.request!=='function')return;\n  const browserFetch=window.fetch.bind(window);\n  const isSupabaseUrl=url=>/^https:\\/\\/[a-z0-9-]+\\.supabase\\.co\\//i.test(url);\n  window.fetch=async function(input,init){\n    const source=input instanceof Request?input:null;\n    const url=typeof input==='string'?input:String(input&&input.url||'');\n    if(!isSupabaseUrl(url))return browserFetch(input,init);\n    const opts=init||{};\n    const headers=new Headers(opts.headers||(source?source.headers:undefined));\n    let body=opts.body;\n    if(body===undefined&&source)body=await source.clone().text();\n    const payload={\n      method:String(opts.method||(source?source.method:'GET')).toUpperCase(),\n      headers:Object.fromEntries(headers.entries()),\n      body:body==null?'':(typeof body==='string'?body:String(body))\n    };\n    let raw;\n    try{raw=nativeBridge.request(url,JSON.stringify(payload));}\n    catch(e){throw new TypeError('Native Supabase request failed: '+e.message);}\n    let result;\n    try{result=JSON.parse(raw);}\n    catch(e){throw new TypeError('Native Supabase bridge returned invalid data');}\n    if(result.error)throw new TypeError(result.error);\n    return new Response(result.body||'',{\n      status:Number(result.status)||200,\n      statusText:result.statusText||'',\n      headers:result.headers||{}\n    });\n  };\n})();\n</script>"
-          if "window.AndroidSupabase" not in s:
-              if "<head>" not in s:
-                  raise SystemExit("FATAL: <head> not found")
-              s=s.replace("<head>","<head>\n"+bridge,1)
-              p.write_text(s,encoding="utf-8")
-          PY
-
-          # Make cloud sync truly automatic: pull newer data from the same cloud account
-          # in the background on every open/focus and every 5 seconds. No manual Pull button
-          # and no confirmation prompt are required for normal cross-device sync.
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path("site/index.html")
-          s=p.read_text(encoding="utf-8",errors="ignore")
-          marker="const origPersist=window.persistHistoryState;"
-          if marker not in s:
-              raise SystemExit("FATAL: cloud persist hook not found")
-          auto = bytes.fromhex("0a77696e646f772e5f5f6c6f734175746f436c6f756450756c6c203d206173796e632066756e6374696f6e28297b0a20207472797b0a20202020696628747970656f6620696e6974436c69656e74213d3d2766756e6374696f6e277c7c747970656f662075736572213d3d2766756e6374696f6e277c7c747970656f6620636c6f7564526f77213d3d2766756e6374696f6e272972657475726e2066616c73653b0a20202020696628747970656f662073796e63696e67213d3d27756e646566696e656427262673796e63696e672972657475726e2066616c73653b0a202020206966286c6f63616c53746f726167652e6765744974656d284155544f5f4b4559293d3d3d2730272972657475726e2066616c73653b0a20202020636f6e737420726f773d617761697420636c6f7564526f7728293b0a20202020636f6e73742072656d6f74654d733d726f772626726f772e757064617465645f61743f286e6577204461746528726f772e757064617465645f6174292e67657454696d6528297c7c30293a303b0a20202020636f6e7374207365656e4d733d4d6174682e6d6178286e65772044617465286c6f63616c53746f726167652e6765744974656d28276c6f7353747564696f436c6f75644c61737450756c6c563127297c7c30292e67657454696d6528297c7c302c6e65772044617465286c6f63616c53746f726167652e6765744974656d28276c6f7353747564696f436c6f75644c61737450757368563127297c7c30292e67657454696d6528297c7c30293b0a20202020696628726f77262672656d6f74654d733e7365656e4d732626726f772e6465766963655f6964213d3d6465766963654964297b0a2020202020206177616974206c6f73436c6f756450756c6c28293b0a2020202020207472797b6c6f63616c53746f726167652e7365744974656d28276c6f7353747564696f436c6f75644c6f63616c46696e6765727072696e745631272c4a534f4e2e737472696e676966792873657269616c697361626c655374617465282929297d63617463682865297b7d0a20202020202072657475726e20747275653b0a202020207d0a202020206c657420736e61703d27273b0a202020207472797b736e61703d4a534f4e2e737472696e676966792873657269616c697361626c6553746174652829297d63617463682865297b72657475726e2066616c73657d0a20202020636f6e7374206c6173743d6c6f63616c53746f726167652e6765744974656d28276c6f7353747564696f436c6f75644c6f63616c46696e6765727072696e74563127297c7c27273b0a20202020696628736e6170213d3d6c617374297b0a2020202020206177616974206c6f73436c6f7564507573682874727565293b0a2020202020206c6f63616c53746f726167652e7365744974656d28276c6f7353747564696f436c6f75644c6f63616c46696e6765727072696e745631272c736e6170293b0a20202020202072657475726e20747275653b0a202020207d0a20207d63617463682865297b636f6e736f6c652e7761726e28274c4f53206175746f6d6174696320636c6f75642073796e63272c65297d0a202072657475726e2066616c73653b0a7d3b0a77696e646f772e5f5f6c6f734175746f436c6f756453746172743d66756e6374696f6e28297b0a202069662877696e646f772e5f5f6c6f734175746f436c6f756454696d65722972657475726e3b0a2020636f6e7374207469636b3d28293d3e7b7472797b77696e646f772e5f5f6c6f734175746f436c6f756450756c6c28297d63617463682865297b7d7d3b0a202077696e646f772e5f5f6c6f734175746f436c6f756454696d65723d736574496e74657276616c287469636b2c35303030293b0a202077696e646f772e6164644576656e744c697374656e65722827666f637573272c7469636b293b0a2020646f63756d656e742e6164644576656e744c697374656e657228277669736962696c6974796368616e6765272c28293d3e7b69662821646f63756d656e742e68696464656e297469636b28297d293b0a202073657454696d656f7574287469636b2c383030293b0a7d3b0a73657454696d656f75742828293d3e7b7472797b77696e646f772e5f5f6c6f734175746f436c6f7564537461727428297d63617463682865297b7d7d2c31353030293b0a").decode("utf-8")
-          s=s.replace(marker,auto+"\n"+marker,1)
-          p.write_text(s,encoding="utf-8")
-          PY
-
-          # Refresh the embedded Orders workspace immediately after a cloud pull.
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path("site/index.html")
-          s=p.read_text(encoding="utf-8",errors="ignore")
-          marker="setStatus('Cloud data pulled successfully · '+new Date(row.updated_at).toLocaleString(),true);"
-          replacement="try{syncLegacyOrdersFrame()}catch(e){};setTimeout(()=>{try{syncLegacyOrdersFrame()}catch(e){}},300);"+marker
-          if marker not in s:
-              raise SystemExit("FATAL: cloud pull success marker not found")
-          s=s.replace(marker,replacement,1)
-          p.write_text(s,encoding="utf-8")
-          PY
-
-          # Build the real PWA icons from the exact LOS Studio logo already embedded
-          # in the V75 app. This keeps the installed icon identical to the app logo.
           python3 - <<'PY'
           from pathlib import Path
           import re, base64
-          html = Path("site/LOS_Studio_Acode_v75.html").read_text(encoding="utf-8", errors="ignore")
-          m = re.search(r'data:image/png;base64,([A-Za-z0-9+/=]+)', html)
-          if not m:
-              raise SystemExit("FATAL: embedded LOS Studio PNG logo not found")
-          raw = base64.b64decode(m.group(1))
-          Path("site/icon-512.png").write_bytes(raw)
-          print(f"Extracted icon-512.png: {len(raw)} bytes")
+          html=Path("site/LOS_Studio_Acode_v75.html").read_text(encoding="utf-8",errors="ignore")
+          m=re.search(r'data:image/png;base64,([A-Za-z0-9+/=]+)',html)
+          if not m: raise SystemExit("V75 embedded logo not found")
+          Path("site/icon-512.png").write_bytes(base64.b64decode(m.group(1)))
           PY
-
-          # Keep the exact embedded LOS Studio artwork for both PWA icon sizes.
-          # Avoid installing image tooling on the Pages runner; that can stall deployment.
           cp site/icon-512.png site/icon-192.png
-          file site/icon-192.png site/icon-512.png
-
-          # Force a Samsung/Chrome-compatible manifest directly into the page.
-          # Samsung Internet has documented support for data: application manifests;
-          # using an inline manifest avoids stale/MIME/path handling differences on Android.
-          python3 - <<'PY'
-          from pathlib import Path
-          import re, json, urllib.parse
-          p = Path("site/index.html")
-          s = p.read_text(encoding="utf-8", errors="ignore")
-          if "<head>" not in s:
-              raise SystemExit("FATAL: <head> not found")
-          s = re.sub(r'<link[^>]+rel=["\']manifest["\'][^>]*>\s*', '', s, flags=re.I)
-          manifest = {
-              "id": "/LOS-app/",
-              "name": "LOS Studio",
-              "short_name": "LOS Studio",
-              "description": "LOS Studio business management app",
-              "start_url": "https://losstudio.github.io/LOS-app/",
-              "scope": "https://losstudio.github.io/LOS-app/",
-              "display": "standalone",
-              "display_override": ["standalone", "minimal-ui"],
-              "background_color": "#ffffff",
-              "theme_color": "#ffffff",
-              "icons": [
-                  {"src":"https://losstudio.github.io/LOS-app/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
-                  {"src":"https://losstudio.github.io/LOS-app/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any"},
-                  {"src":"https://losstudio.github.io/LOS-app/icon-192.png","sizes":"192x192","type":"image/png","purpose":"maskable"},
-                  {"src":"https://losstudio.github.io/LOS-app/icon-512.png","sizes":"512x512","type":"image/png","purpose":"maskable"}
-              ]
-          }
-          data_url = "data:application/manifest+json," + urllib.parse.quote(json.dumps(manifest, separators=(",",":")))
-          injection = f'''<link rel="manifest" href="{data_url}">
-          <link rel="icon" type="image/png" sizes="192x192" href="/LOS-app/icon-192.png">
-          <link rel="icon" type="image/png" sizes="512x512" href="/LOS-app/icon-512.png">
-          <link rel="apple-touch-icon" sizes="192x192" href="/LOS-app/icon-192.png">
-          <meta name="theme-color" content="#ffffff">
-          '''
-          s = s.replace("<head>", "<head>\n" + injection, 1)
-          p.write_text(s, encoding="utf-8")
-          PY
-
-          # Add the service-worker registration at the very end of the document.
-          # Do NOT insert it at the first </body>: the app contains </body> inside
-          # a JavaScript template literal used for printing.
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path("site/index.html")
-          s = p.read_text(encoding="utf-8", errors="ignore")
-          registration = """
-          <script>
-          if ("serviceWorker" in navigator) {
-            window.addEventListener("load", () => {
-              navigator.serviceWorker.register("./sw.js").catch(() => {});
-            });
-          }
-          </script>
-          """
-          if "navigator.serviceWorker.register" not in s:
-              s += "\n" + registration + "\n"
-          p.write_text(s, encoding="utf-8")
-          PY
-
-          python3 - <<'PY'
-          from pathlib import Path
-          s = Path("site/index.html").read_text(encoding="utf-8", errors="ignore")
-          bad = "</script>" + chr(10) + "</body></html>`"
-          if bad in s:
-              raise SystemExit("FATAL: index.html still contains the broken embedded </script> boundary")
-          print("Validated index.html: no broken embedded script boundary")
-          PY
-          echo "Deployed files:"
-          find site -maxdepth 2 -type f -printf '%p %s bytes\n' | sort
-
+          cmp -s site/LOS_Studio_Acode_v75.html site/index.html
+          echo "CLEAN V75 DEPLOYMENT"
+          wc -c site/LOS_Studio_Acode_v75.html site/index.html
       - name: Configure Pages
         uses: actions/configure-pages@v5
         with:
           enablement: true
-
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: site
-
   deploy:
     environment:
       name: github-pages
