@@ -123,12 +123,6 @@ if old_new_order not in s:
     raise SystemExit("FATAL: legacyNewOrder source block not found")
 s = s.replace(old_new_order, new_new_order, 1)
 
-old_pull_refresh = """      localStorage.setItem('losStudioCloudLastPullV1',row.updated_at||new Date().toISOString());renderAll();if(window.v75RenderAll)window.v75RenderAll();setStatus('Cloud data pulled successfully · '+new Date(row.updated_at).toLocaleString(),true);"""
-new_pull_refresh = """      localStorage.setItem('losStudioCloudLastPullV1',row.updated_at||new Date().toISOString());renderAll();if(window.v75RenderAll)window.v75RenderAll();try{syncLegacyOrdersFrame()}catch(e){console.warn('Legacy Orders cloud refresh:',e)}setStatus('Cloud data pulled successfully · '+new Date(row.updated_at).toLocaleString(),true);"""
-if old_pull_refresh not in s:
-    raise SystemExit("FATAL: cloud pull completion block not found")
-s = s.replace(old_pull_refresh, new_pull_refresh, 1)
-
 m = re.search(r"const LEGACY_ORDERS_HTML_B64\s*=\s*['\"]([^'\"]+)", s)
 if not m:
     raise SystemExit("FATAL: embedded legacy Orders base64 not found")
