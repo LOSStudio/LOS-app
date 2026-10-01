@@ -65,37 +65,25 @@ jobs:
           cp manifest.webmanifest site/manifest.webmanifest
           cp sw.js site/sw.js
 
-          # Fix the literal </script> inside the inventory print template.
-          # It is HTML inside a JavaScript template literal, so it must be escaped
-          # before GitHub Pages serves the file.
-          python3 -c 'from pathlib import Path; p=Path("site/index.html"); s=p.read_text(encoding="utf-8",errors="ignore"); s=s.replace("</script>"+chr(10)+"</body></html>`","<\\/script>"+chr(10)+"</body></html>`",1); p.write_text(s,encoding="utf-8")'
-
+          # The V75 source already contains the PWA manifest link.
+          # Add the service-worker registration at the very end of the document.
+          # Do NOT insert it at the first </body>: the app contains </body> inside
+          # a JavaScript template literal used for printing.
           python3 - <<'PY'
           from pathlib import Path
           p = Path("site/index.html")
           s = p.read_text(encoding="utf-8", errors="ignore")
-
-          if 'rel="manifest"' not in s and "rel='manifest'" not in s:
-              s = s.replace(
-                  "</head>",
-                  '<link rel="manifest" href="./manifest.webmanifest">\n<meta name="theme-color" content="#ffffff">\n</head>',
-                  1
-              )
-
-          if "navigator.serviceWorker.register" not in s:
-              s = s.replace(
-                  "</body>",
-                  '''<script>
+          registration = """
+          <script>
           if ("serviceWorker" in navigator) {
             window.addEventListener("load", () => {
               navigator.serviceWorker.register("./sw.js").catch(() => {});
             });
           }
           </script>
-          </body>''',
-                  1
-              )
-
+          """
+          if "navigator.serviceWorker.register" not in s:
+              s += "\n" + registration + "\n"
           p.write_text(s, encoding="utf-8")
           PY
 
@@ -107,7 +95,6 @@ jobs:
               raise SystemExit("FATAL: index.html still contains the broken embedded </script> boundary")
           print("Validated index.html: no broken embedded script boundary")
           PY
-
           echo "Deployed files:"
           find site -maxdepth 2 -type f -printf '%p %s bytes\n' | sort
 
