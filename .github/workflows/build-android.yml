@@ -66,29 +66,26 @@ jobs:
           /tmp/gradle-8.9/bin/gradle :app:assembleRelease --no-daemon
           ls -lh app/build/outputs/apk/release/app-release-unsigned.apk
 
-      - name: Sign and align release APK for device testing
+      - name: Sign and align release APK with LOS Studio registered key
         shell: bash
+        env:
+          LOS_STUDIO_KEYSTORE_B64: ${{ secrets.LOS_STUDIO_KEYSTORE_B64 }}
+          LOS_STUDIO_KEYSTORE_PASSWORD: ${{ secrets.LOS_STUDIO_KEYSTORE_PASSWORD }}
         run: |
-          set -e
+          set -euo pipefail
           export ANDROID_HOME=/usr/local/lib/android/sdk
           BUILD_TOOLS="$ANDROID_HOME/build-tools/35.0.0"
-          keytool -genkeypair -v \
-            -keystore /tmp/losstudio-test.keystore \
-            -alias losstudio \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -storepass losstudio-test \
-            -keypass losstudio-test \
-            -dname "CN=LOS Studio Test, O=LOS Studio, C=GB"
+          test -n "$LOS_STUDIO_KEYSTORE_B64" || { echo "Missing LOS_STUDIO_KEYSTORE_B64"; exit 1; }
+          test -n "$LOS_STUDIO_KEYSTORE_PASSWORD" || { echo "Missing LOS_STUDIO_KEYSTORE_PASSWORD"; exit 1; }
+          printf '%s' "$LOS_STUDIO_KEYSTORE_B64" | base64 --decode > /tmp/losstudio-release.keystore
           "$BUILD_TOOLS/zipalign" -f 4 \
             android/app/build/outputs/apk/release/app-release-unsigned.apk \
             /tmp/losstudio-aligned.apk
           "$BUILD_TOOLS/apksigner" sign \
-            --ks /tmp/losstudio-test.keystore \
+            --ks /tmp/losstudio-release.keystore \
             --ks-key-alias losstudio \
-            --ks-pass pass:losstudio-test \
-            --key-pass pass:losstudio-test \
+            --ks-pass env:LOS_STUDIO_KEYSTORE_PASSWORD \
+            --key-pass env:LOS_STUDIO_KEYSTORE_PASSWORD \
             --v1-signing-enabled true \
             --v2-signing-enabled true \
             --v3-signing-enabled true \
@@ -96,6 +93,7 @@ jobs:
             --out android/app/build/outputs/apk/release/LOS-Studio.apk \
             /tmp/losstudio-aligned.apk
           "$BUILD_TOOLS/apksigner" verify --verbose android/app/build/outputs/apk/release/LOS-Studio.apk
+          "$BUILD_TOOLS/apksigner" verify --print-certs android/app/build/outputs/apk/release/LOS-Studio.apk
           ls -lh android/app/build/outputs/apk/release/LOS-Studio.apk
 
       - name: Publish APK release
