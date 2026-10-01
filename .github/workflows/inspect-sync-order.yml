@@ -1,0 +1,45 @@
+name: Inspect sync and order persistence
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/inspect-sync-order.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect V75 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          unzip -q "LOS_Studio_V75_icon_fixed.zip" -d /tmp/v75
+          f="$(find /tmp/v75 -name 'LOS_Studio_Acode_v75.html' -print -quit)"
+          python3 - "$f" <<'PY'
+          import sys,re
+          s=open(sys.argv[1],encoding='utf-8',errors='ignore').read()
+          pats=[
+            r'window\.losCloudPull\s*=',
+            r'window\.losCloudPush\s*=',
+            r'function\s+losCloudPull',
+            r'function\s+losCloudPush',
+            r'localStorage\.setItem\([^\n]*(?:orders|order)',
+            r'localStorage\.getItem\([^\n]*(?:orders|order)',
+            r'legacyOrders',
+            r'orderHistory',
+            r'los_orders',
+            r'los_orders_workspace',
+            r'los_orders_history',
+            r'losStudioCloudDeviceIdV1'
+          ]
+          for p in pats:
+            print("\n===== "+p+" =====")
+            n=0
+            for m in re.finditer(p,s,re.I):
+              n+=1
+              a=max(0,m.start()-500); b=min(len(s),m.end()+1200)
+              print(s[a:b].replace("\n"," ")[:2200])
+              if n>=8: break
+            print("COUNT",n)
+          PY
