@@ -19,15 +19,16 @@ jobs:
           unzip -q "LOS_Studio_V75_icon_fixed.zip" -d /tmp/v75
           f="$(find /tmp/v75 -name 'LOS_Studio_Acode_v75.html' -print -quit)"
           test -n "$f"
+          grep -n -E 'losCloud(Push|Pull|SyncNow|SetAutoSync)|losCloudSchedulePush|los_studio_sync' "$f" | head -n 120
           python3 - "$f" <<'PY'
-          import sys,re
-          s=open(sys.argv[1],encoding='utf-8',errors='ignore').read()
-          for name in ['losCloudPush','losCloudPull','losCloudSyncNow','losCloudSetAutoSync','losCloudSchedulePush']:
-              print("\n===== "+name+" =====")
-              m=re.search(r'(?i).{0,180}'+re.escape(name)+r'.{0,3500}',s,re.S)
-              print(m.group(0)[:4200] if m else 'NOT FOUND')
-          print("\n===== ALL SUPABASE LOS SYNC REFERENCES =====")
-          for m in re.finditer(r'.{0,120}(?:los_studio_sync|supabase|cloudRow|cloudPull|cloudPush).{0,300}',s,re.I|re.S):
-              print(m.group(0)[:500].replace("\n"," "))
+          import sys
+          s=open(sys.argv[1],encoding='utf-8',errors='ignore').read().splitlines()
+          names=['losCloudPush','losCloudPull','losCloudSyncNow','losCloudSetAutoSync','losCloudSchedulePush']
+          for n in names:
+              print("\n===== "+n+" =====")
+              for i,line in enumerate(s):
+                  if n in line:
+                      a=max(0,i-8); b=min(len(s),i+60)
+                      print("\n".join(f"{j+1}: {s[j]}" for j in range(a,b)))
+                      break
           PY
-# rerun
