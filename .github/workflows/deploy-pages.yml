@@ -65,6 +65,27 @@ jobs:
           cp manifest.webmanifest site/manifest.webmanifest
           cp sw.js site/sw.js
 
+          # Build the real PWA icons from the exact LOS Studio logo already embedded
+          # in the V75 app. This keeps the installed icon identical to the app logo.
+          python3 - <<'PY'
+          from pathlib import Path
+          import re, base64
+          html = Path("site/LOS_Studio_Acode_v75.html").read_text(encoding="utf-8", errors="ignore")
+          m = re.search(r'data:image/png;base64,([A-Za-z0-9+/=]+)', html)
+          if not m:
+              raise SystemExit("FATAL: embedded LOS Studio PNG logo not found")
+          raw = base64.b64decode(m.group(1))
+          Path("site/icon-512.png").write_bytes(raw)
+          print(f"Extracted icon-512.png: {len(raw)} bytes")
+          PY
+
+          if ! command -v convert >/dev/null 2>&1; then
+            echo "FATAL: ImageMagick convert is not available on the GitHub runner."
+            exit 1
+          fi
+          convert site/icon-512.png -resize 192x192 site/icon-192.png
+          file site/icon-192.png site/icon-512.png
+
           # The V75 source already contains the PWA manifest link.
           # Add the service-worker registration at the very end of the document.
           # Do NOT insert it at the first </body>: the app contains </body> inside
