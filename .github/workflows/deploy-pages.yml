@@ -51,6 +51,16 @@ jobs:
           PY
           cp site/icon-512.png site/icon-192.png
           cmp -s site/LOS_Studio_Acode_v75.html site/index.html
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path("site/index.html")
+          s=p.read_text(encoding="utf-8")
+          old="function serialisableState(){return JSON.parse(JSON.stringify(state))}"
+          new="function serialisableState(){const s=JSON.parse(JSON.stringify(state));if(s.info&&Object.prototype.hasOwnProperty.call(s.info,'logoData'))delete s.info.logoData;return s}"
+          if old not in s: raise SystemExit("Sync patch target not found")
+          p.write_text(s.replace(old,new,1),encoding="utf-8")
+          PY
+          echo "SYNC-ONLY PATCH: exclude large local logoData from cloud payload; keep local logo on pull"
           echo "CLEAN V75 DEPLOYMENT"
           wc -c site/LOS_Studio_Acode_v75.html site/index.html
       - name: Configure Pages
