@@ -191,6 +191,7 @@ jobs:
           PY
           echo "SYNC-ONLY PATCH: deterministic push/pull reconciliation"
           echo "CLEAN V75 DEPLOYMENT"
+          echo "SYNC PULL APPLY FIX DEPLOYMENT CHECK"
           wc -c site/LOS_Studio_Acode_v75.html site/index.html
       - name: Configure Pages
         uses: actions/configure-pages@v5
