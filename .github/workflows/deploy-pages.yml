@@ -63,32 +63,46 @@ jobs:
           inject="""const oldSwitch=window.switchView; if(oldSwitch){window.switchView=function(name){oldSwitch(name);if(name==='CloudSync')loadConfig()}}
           const __losSyncKeys=['los_business_profile','los_inventory','los_packaging','los_history','los_orders','los_orders_workspace','los_orders_history','los_db_customers','los_db_purchases','los_db_adjustments','los_hmrc_expenses_ledger'];
           let __losSyncApplying=false;
-          function __losPatchSyncRealm(w){try{if(!w||w.__losSyncRealmPatched)return;const st=w.localStorage,proto=w.Storage&&w.Storage.prototype;if(!st||!proto)return;w.__losSyncRealmPatched=true;const set=proto.setItem,remove=proto.removeItem;proto.setItem=function(k,v){const r=set.call(this,k,v);if(!__losSyncApplying&&__losSyncKeys.includes(k))setTimeout(()=>{try{losCloudSchedulePush()}catch(e){}},0);return r};proto.removeItem=function(k){const r=remove.call(this,k);if(!__losSyncApplying&&__losSyncKeys.includes(k))setTimeout(()=>{try{losCloudSchedulePush()}catch(e){}},0);return r}}catch(e){}}
-          __losPatchSyncRealm(window);
-          document.querySelectorAll('iframe').forEach(f=>f.addEventListener('load',()=>__losPatchSyncRealm(f.contentWindow)));
-          new MutationObserver(()=>document.querySelectorAll('iframe').forEach(f=>{try{if(!f.__losSyncLoadHooked){f.__losSyncLoadHooked=true;f.addEventListener('load',()=>__losPatchSyncRealm(f.contentWindow));if(f.contentDocument) __losPatchSyncRealm(f.contentWindow)}}catch(e){}})).observe(document.documentElement,{childList:true,subtree:true});
+          function __losMarkLocalChange(){if(!__losSyncApplying){try{localStorage.setItem('losStudioCloudLocalChangeV1',new Date().toISOString())}catch(e){}}}
+          const __losSyncSetItem=Storage.prototype.setItem;
+          Storage.prototype.setItem=function(k,v){const r=__losSyncSetItem.call(this,k,v);if(!__losSyncApplying&&this===localStorage&&__losSyncKeys.includes(k)){__losMarkLocalChange();setTimeout(()=>{try{losCloudSchedulePush()}catch(e){}},0)}return r};
+          const __losSyncRemoveItem=Storage.prototype.removeItem;
+          Storage.prototype.removeItem=function(k){const r=__losSyncRemoveItem.call(this,k);if(!__losSyncApplying&&this===localStorage&&__losSyncKeys.includes(k)){__losMarkLocalChange();setTimeout(()=>{try{losCloudSchedulePush()}catch(e){}},0)}return r};
           const __losSyncPull=window.losCloudPull;
           if(__losSyncPull){window.losCloudPull=async function(){__losSyncApplying=true;try{return await __losSyncPull.apply(this,arguments)}finally{try{if(Array.isArray(state?._syncOrdersWorkspace))localStorage.setItem('los_orders_workspace',JSON.stringify(state._syncOrdersWorkspace));if(Array.isArray(state?._syncOrdersHistory))localStorage.setItem('los_orders_history',JSON.stringify(state._syncOrdersHistory))}catch(e){console.warn('Cloud Orders workspace restore skipped',e)}__losSyncApplying=false}}}
-          function __losForceAutoPush(){if(__losSyncApplying)return;setTimeout(()=>{if(__losSyncApplying)return;try{if(typeof losCloudPush==='function')losCloudPush(true)}catch(e){}},1200)}
-          const __losOriginalSchedule=window.losCloudSchedulePush;
-          window.losCloudSchedulePush=function(){if(__losSyncApplying)return;try{if(__losOriginalSchedule)__losOriginalSchedule.apply(this,arguments)}catch(e){}};
-          if(typeof window.persistHistoryState==='function'){const __losPersist=window.persistHistoryState;window.persistHistoryState=function(){const r=__losPersist.apply(this,arguments);__losForceAutoPush();return r}}
-          let __losSyncBusy=false;
-          async function __losAutomaticSync(){
-            if(__losSyncApplying||__losSyncBusy)return;
-            if(localStorage.getItem('losCloudAutoSyncV1')!=='1')return;
-            if(typeof window.losCloudSyncNow!=='function')return;
-            __losSyncBusy=true;
+          const __losOriginalPersist=window.persistHistoryState;
+          if(__losOriginalPersist){window.persistHistoryState=function(){const r=__losOriginalPersist.apply(this,arguments);__losMarkLocalChange();return r}}
+          let __losReconciling=false;
+          async function __losAutomaticCloudReconcile(){
+            if(__losSyncApplying||__losReconciling)return;
+            if(localStorage.getItem('losStudioCloudAutoSyncV1')==='0')return;
+            if(typeof window.losCloudPush!=='function'||typeof window.losCloudPull!=='function')return;
             try{
-              __losSyncApplying=true;
-              const oldConfirm=window.confirm;
-              window.confirm=()=>true;
-              try{await window.losCloudSyncNow()}finally{window.confirm=oldConfirm}
-            }catch(e){console.warn('LOS automatic sync skipped',e)}
-            finally{__losSyncApplying=false;__losSyncBusy=false}
+              __losReconciling=true;
+              const c=cfg();
+              if(!c.url||!c.key)return;
+              const row=await cloudRow();
+              if(!row)return;
+              const cloudTime=new Date(row.updated_at||0).getTime();
+              if(!cloudTime)return;
+              const localChange=new Date(localStorage.getItem('losStudioCloudLocalChangeV1')||0).getTime();
+              const lastPull=new Date(localStorage.getItem('losStudioCloudLastPullV1')||0).getTime();
+              if(localChange>cloudTime+250){
+                await window.losCloudPush(true);
+                localStorage.setItem('losStudioCloudLastPushV1',new Date().toISOString());
+                return;
+              }
+              if(cloudTime>Math.max(lastPull,localChange)+250){
+                __losSyncApplying=true;
+                const oldConfirm=window.confirm;
+                window.confirm=()=>true;
+                try{await window.losCloudPull()}finally{window.confirm=oldConfirm;__losSyncApplying=false}
+              }
+            }catch(e){console.warn('LOS automatic cloud reconcile:',e.message)}
+            finally{__losReconciling=false}
           }
-          setInterval(__losAutomaticSync,5000);
-          setTimeout(__losAutomaticSync,2500);
+          setInterval(__losAutomaticCloudReconcile,5000);
+          setTimeout(__losAutomaticCloudReconcile,2500);
           """
           if marker not in s: raise SystemExit("Sync hook marker not found")
           s=s.replace(marker,inject,1)
