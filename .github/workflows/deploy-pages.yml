@@ -133,6 +133,9 @@ jobs:
           """
           if marker not in s: raise SystemExit("Sync hook marker not found")
           s=s.replace(marker,inject,1)
+          # Keep a normal draggable scrollbar available in desktop browsers.
+          scroll_css="""<style id="los-scrollbar-fix">html{scrollbar-width:auto!important;overflow-y:scroll!important}body{scrollbar-width:auto!important;overflow-y:auto!important}::-webkit-scrollbar{width:14px!important;height:14px!important}::-webkit-scrollbar-thumb{min-height:48px!important}</style>"""
+          s=s.replace("</head>",scroll_css+"</head>",1)
           p.write_text(s,encoding="utf-8")
           PY
           echo "ACCOUNT-CLOUD ARCHITECTURE: one cloud snapshot per signed-in account"
