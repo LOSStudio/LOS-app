@@ -73,32 +73,22 @@ jobs:
           const __losOriginalSchedule=window.losCloudSchedulePush;
           window.losCloudSchedulePush=function(){if(__losSyncApplying)return;try{if(__losOriginalSchedule)__losOriginalSchedule.apply(this,arguments)}catch(e){}};
           if(typeof window.persistHistoryState==='function'){const __losPersist=window.persistHistoryState;window.persistHistoryState=function(){const r=__losPersist.apply(this,arguments);__losForceAutoPush();return r}}
-          async function __losStartRealtimeSync(){
+          let __losSyncBusy=false;
+          async function __losAutomaticSync(){
+            if(__losSyncApplying||__losSyncBusy)return;
+            if(localStorage.getItem('losCloudAutoSyncV1')!=='1')return;
+            if(typeof window.losCloudSyncNow!=='function')return;
+            __losSyncBusy=true;
             try{
-              if(window.__losRealtimeSyncStarted)return;
-              const url=localStorage.getItem('los_supabase_url')||localStorage.getItem('losCloudSupabaseUrl')||(document.getElementById('syncSupabaseUrl')||{}).value;
-              const key=localStorage.getItem('los_supabase_key')||localStorage.getItem('losCloudSupabaseKey')||(document.getElementById('syncSupabaseKey')||{}).value;
-              if(!url||!key)return;
-              if(!window.supabase){await new Promise((resolve,reject)=>{const sc=document.createElement('script');sc.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';sc.onload=resolve;sc.onerror=reject;document.head.appendChild(sc)})}
-              if(!window.supabase||!window.supabase.createClient)return;
-              const client=window.supabase.createClient(url,key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
-              const {data:{session}}=await client.auth.getSession();
-              if(!session?.user?.id)return;
-              window.__losRealtimeSyncStarted=true;
-              const channel=client.channel('los-studio-sync-'+session.user.id)
-                .on('postgres_changes',{event:'UPDATE',schema:'public',table:'los_studio_sync',filter:'user_id=eq.'+session.user.id},payload=>{
-                  const remote=payload.new||{};
-                  const localDevice=localStorage.getItem('losStudioCloudDeviceIdV1')||'';
-                  if(remote.device_id&&remote.device_id===localDevice)return;
-                  __losSyncApplying=true;
-                  try{if(typeof window.losCloudPull==='function')window.losCloudPull()}catch(e){}finally{setTimeout(()=>{__losSyncApplying=false},1500)}
-                })
-                .subscribe();
-              window.__losRealtimeSyncChannel=channel;
-            }catch(e){console.warn('LOS realtime sync unavailable',e)}
+              __losSyncApplying=true;
+              const oldConfirm=window.confirm;
+              window.confirm=()=>true;
+              try{await window.losCloudSyncNow()}finally{window.confirm=oldConfirm}
+            }catch(e){console.warn('LOS automatic sync skipped',e)}
+            finally{__losSyncApplying=false;__losSyncBusy=false}
           }
-          __losStartRealtimeSync();
-          setInterval(()=>{try{__losStartRealtimeSync()}catch(e){}},10000);
+          setInterval(__losAutomaticSync,5000);
+          setTimeout(__losAutomaticSync,2500);
           """
           if marker not in s: raise SystemExit("Sync hook marker not found")
           s=s.replace(marker,inject,1)
