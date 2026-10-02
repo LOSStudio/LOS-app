@@ -20,9 +20,10 @@ jobs:
           python3 - "$f" <<'PY'
           import sys,re
           s=open(sys.argv[1],encoding='utf-8',errors='ignore').read()
-          for term in ['function losCloudPush','function losCloudPull','function losCloudSchedulePush','los_orders_workspace','localStorage.setItem']:
+          terms=['window.losCloudPush=async','window.losCloudPull=async','localStorageData','los_orders_workspace']
+          for term in terms:
               print("\n=== "+term+" ===")
-              for m in list(re.finditer(re.escape(term),s))[:5]:
-                  a=max(0,m.start()-1200); b=min(len(s),m.start()+3500)
+              for m in list(re.finditer(re.escape(term),s))[:4]:
+                  a=max(0,m.start()-900); b=min(len(s),m.start()+6000)
                   print(s[a:b])
           PY
