@@ -1,0 +1,28 @@
+name: Debug V75 sync source
+on:
+  push:
+    branches: [debug-sync-20261002]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect
+        shell: bash
+        run: |
+          set -e
+          rm -rf x
+          mkdir x
+          unzip -q LOS_Studio_V75_icon_fixed.zip -d x
+          f=$(find x -name 'LOS_Studio_Acode_v75.html' -print -quit)
+          python3 - "$f" <<'PY'
+          import sys,re
+          s=open(sys.argv[1],encoding='utf-8',errors='ignore').read()
+          for term in ['function losCloudPush','function losCloudPull','function losCloudSchedulePush','los_orders_workspace','localStorage.setItem']:
+              print("\n=== "+term+" ===")
+              for m in list(re.finditer(re.escape(term),s))[:5]:
+                  a=max(0,m.start()-1200); b=min(len(s),m.start()+3500)
+                  print(s[a:b])
+          PY
