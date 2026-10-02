@@ -56,7 +56,7 @@ jobs:
           p=Path("site/index.html")
           s=p.read_text(encoding="utf-8")
           old="function serialisableState(){return JSON.parse(JSON.stringify(state))}"
-          new="function serialisableState(){const s=JSON.parse(JSON.stringify(state));if(s.info&&Object.prototype.hasOwnProperty.call(s.info,'logoData'))delete s.info.logoData;try{s._syncOrdersWorkspace=JSON.parse(localStorage.getItem('los_orders_workspace')||'null');s._syncOrdersHistory=JSON.parse(localStorage.getItem('los_orders_history')||'null')}catch(e){}return s}"
+          new="function serialisableState(){const s=JSON.parse(JSON.stringify(state));if(s.info&&Object.prototype.hasOwnProperty.call(s.info,'logoData'))delete s.info.logoData;try{s.localStorageData={};__losSyncKeys.forEach(k=>{const v=localStorage.getItem(k);if(v!==null)s.localStorageData[k]=v});s._syncOrdersWorkspace=JSON.parse(localStorage.getItem('los_orders_workspace')||'null');s._syncOrdersHistory=JSON.parse(localStorage.getItem('los_orders_history')||'null')}catch(e){}return s}"
           if old not in s: raise SystemExit("Sync patch target not found")
           s=s.replace(old,new,1)
           marker="const oldSwitch=window.switchView; if(oldSwitch){window.switchView=function(name){oldSwitch(name);if(name==='CloudSync')loadConfig()}}"
@@ -78,7 +78,7 @@ jobs:
           const __losOriginalPersist=window.persistHistoryState;
           if(__losOriginalPersist){window.persistHistoryState=function(){const r=__losOriginalPersist.apply(this,arguments);__losMarkLocalChange();return r}}
           async function __losApplyCloudState(){
-            if(state&&state.localStorageData&&typeof state.localStorageData==='object')Object.keys(state.localStorageData).forEach(k=>{try{localStorage.setItem(k,typeof state.localStorageData[k]==='string'?state.localStorageData[k]:JSON.stringify(state.localStorageData[k]))}catch(e){}});
+            if(state&&state.localStorageData&&typeof state.localStorageData==='object')Object.keys(state.localStorageData).forEach(k=>{try{if(__losSyncKeys.includes(k))localStorage.setItem(k,typeof state.localStorageData[k]==='string'?state.localStorageData[k]:JSON.stringify(state.localStorageData[k]))}catch(e){}});
             if(Array.isArray(state?._syncOrdersWorkspace))localStorage.setItem('los_orders_workspace',JSON.stringify(state._syncOrdersWorkspace));
             if(Array.isArray(state?._syncOrdersHistory))localStorage.setItem('los_orders_history',JSON.stringify(state._syncOrdersHistory));
             const now=new Date().toISOString();
