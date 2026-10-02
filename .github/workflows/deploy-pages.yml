@@ -120,12 +120,18 @@ jobs:
             }catch(e){console.error(e);setStatus('Sync failed: '+e.message);alert('Sync failed: '+e.message)}
           };
           async function __losCloudReconcile(){
-            if(__losSyncApplying||typeof window.losCloudPush!=='function')return;
-            try{const c=cfg();if(!c.url||!c.key)return;const row=await cloudRow();if(!row)return;
+            if(__losSyncApplying||__losSyncBusy||typeof window.losCloudPush!=='function')return;
+            __losSyncBusy=true;
+            try{const c=cfg();if(!c.url||!c.key)return;const row=await cloudRow();
+              if(!__losSyncHydrated){
+                if(row){__losApplyCloudSnapshot(row);__losSyncHydrated=true;await new Promise(r=>setTimeout(r,50));location.reload();return}
+                __losSyncHydrated=true;await window.losCloudPush(true);return
+              }
+              if(!row)return;
               const cloudTime=new Date(row.updated_at||0).getTime(),localChange=new Date(localStorage.getItem('losStudioCloudLocalChangeV1')||0).getTime(),lastPull=new Date(localStorage.getItem('losStudioCloudLastPullV1')||0).getTime();
               if(localChange>lastPull+250&&localChange>cloudTime+250){await window.losCloudPush(true);return}
               if(cloudTime>lastPull+250&&localChange<=lastPull+250){await __losPullNewest(row,false)}
-            }catch(e){console.warn('LOS automatic cloud sync:',e.message)}
+            }catch(e){console.warn('LOS automatic cloud sync:',e.message)}finally{__losSyncBusy=false}
           }
           setInterval(__losCloudReconcile,5000);
           setTimeout(__losCloudReconcile,1500);
