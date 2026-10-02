@@ -69,6 +69,36 @@ jobs:
           new MutationObserver(()=>document.querySelectorAll('iframe').forEach(f=>{try{if(!f.__losSyncLoadHooked){f.__losSyncLoadHooked=true;f.addEventListener('load',()=>__losPatchSyncRealm(f.contentWindow));if(f.contentDocument) __losPatchSyncRealm(f.contentWindow)}}catch(e){}})).observe(document.documentElement,{childList:true,subtree:true});
           const __losSyncPull=window.losCloudPull;
           if(__losSyncPull){window.losCloudPull=async function(){__losSyncApplying=true;try{return await __losSyncPull.apply(this,arguments)}finally{try{if(Array.isArray(state?._syncOrdersWorkspace))localStorage.setItem('los_orders_workspace',JSON.stringify(state._syncOrdersWorkspace));if(Array.isArray(state?._syncOrdersHistory))localStorage.setItem('los_orders_history',JSON.stringify(state._syncOrdersHistory))}catch(e){console.warn('Cloud Orders workspace restore skipped',e)}__losSyncApplying=false}}}
+          function __losForceAutoPush(){if(__losSyncApplying)return;setTimeout(()=>{if(__losSyncApplying)return;try{if(typeof losCloudPush==='function')losCloudPush(true)}catch(e){}},1200)}
+          const __losOriginalSchedule=window.losCloudSchedulePush;
+          window.losCloudSchedulePush=function(){if(__losSyncApplying)return;try{if(__losOriginalSchedule)__losOriginalSchedule.apply(this,arguments)}catch(e){}};
+          if(typeof window.persistHistoryState==='function'){const __losPersist=window.persistHistoryState;window.persistHistoryState=function(){const r=__losPersist.apply(this,arguments);__losForceAutoPush();return r}}
+          async function __losStartRealtimeSync(){
+            try{
+              if(window.__losRealtimeSyncStarted)return;
+              const url=localStorage.getItem('los_supabase_url')||localStorage.getItem('losCloudSupabaseUrl')||(document.getElementById('syncSupabaseUrl')||{}).value;
+              const key=localStorage.getItem('los_supabase_key')||localStorage.getItem('losCloudSupabaseKey')||(document.getElementById('syncSupabaseKey')||{}).value;
+              if(!url||!key)return;
+              if(!window.supabase){await new Promise((resolve,reject)=>{const sc=document.createElement('script');sc.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';sc.onload=resolve;sc.onerror=reject;document.head.appendChild(sc)})}
+              if(!window.supabase||!window.supabase.createClient)return;
+              const client=window.supabase.createClient(url,key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
+              const {data:{session}}=await client.auth.getSession();
+              if(!session?.user?.id)return;
+              window.__losRealtimeSyncStarted=true;
+              const channel=client.channel('los-studio-sync-'+session.user.id)
+                .on('postgres_changes',{event:'UPDATE',schema:'public',table:'los_studio_sync',filter:'user_id=eq.'+session.user.id},payload=>{
+                  const remote=payload.new||{};
+                  const localDevice=localStorage.getItem('losStudioCloudDeviceIdV1')||'';
+                  if(remote.device_id&&remote.device_id===localDevice)return;
+                  __losSyncApplying=true;
+                  try{if(typeof window.losCloudPull==='function')window.losCloudPull()}catch(e){}finally{setTimeout(()=>{__losSyncApplying=false},1500)}
+                })
+                .subscribe();
+              window.__losRealtimeSyncChannel=channel;
+            }catch(e){console.warn('LOS realtime sync unavailable',e)}
+          }
+          __losStartRealtimeSync();
+          setInterval(()=>{try{__losStartRealtimeSync()}catch(e){}},10000);
           """
           if marker not in s: raise SystemExit("Sync hook marker not found")
           s=s.replace(marker,inject,1)
