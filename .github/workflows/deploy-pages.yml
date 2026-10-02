@@ -68,6 +68,45 @@ jobs:
           Storage.prototype.setItem=function(k,v){const r=__losSyncSetItem.call(this,k,v);if(!__losSyncApplying&&this===localStorage&&__losSyncKeys.includes(k)){__losMarkLocalChange();setTimeout(()=>{try{losCloudSchedulePush()}catch(e){}},0)}return r};
           const __losSyncRemoveItem=Storage.prototype.removeItem;
           Storage.prototype.removeItem=function(k){const r=__losSyncRemoveItem.call(this,k);if(!__losSyncApplying&&this===localStorage&&__losSyncKeys.includes(k)){__losMarkLocalChange();setTimeout(()=>{try{losCloudSchedulePush()}catch(e){}},0)}return r};
+          function __losPatchSyncRealm(w){
+            try{
+              if(!w||w.__losSyncRealmPatched)return;
+              const st=w.localStorage,proto=w.Storage&&w.Storage.prototype;
+              if(!st||!proto)return;
+              w.__losSyncRealmPatched=true;
+              const set=proto.setItem,remove=proto.removeItem;
+              proto.setItem=function(k,v){
+                const r=set.call(this,k,v);
+                if(!__losSyncApplying&&this===st&&__losSyncKeys.includes(k)){
+                  __losMarkLocalChange();
+                  setTimeout(()=>{try{losCloudSchedulePush()}catch(e){}},0);
+                }
+                return r;
+              };
+              proto.removeItem=function(k){
+                const r=remove.call(this,k);
+                if(!__losSyncApplying&&this===st&&__losSyncKeys.includes(k)){
+                  __losMarkLocalChange();
+                  setTimeout(()=>{try{losCloudSchedulePush()}catch(e){}},0);
+                }
+                return r;
+              };
+            }catch(e){}
+          }
+          __losPatchSyncRealm(window);
+          function __losHookSyncIframes(){
+            document.querySelectorAll('iframe').forEach(f=>{
+              try{
+                if(!f.__losSyncLoadHooked){
+                  f.__losSyncLoadHooked=true;
+                  f.addEventListener('load',()=>__losPatchSyncRealm(f.contentWindow));
+                }
+                if(f.contentDocument)__losPatchSyncRealm(f.contentWindow);
+              }catch(e){}
+            });
+          }
+          __losHookSyncIframes();
+          new MutationObserver(__losHookSyncIframes).observe(document.documentElement,{childList:true,subtree:true});
           const __losSyncPull=window.losCloudPull;
           if(__losSyncPull){window.losCloudPull=async function(){__losSyncApplying=true;try{return await __losSyncPull.apply(this,arguments)}finally{try{if(Array.isArray(state?._syncOrdersWorkspace))localStorage.setItem('los_orders_workspace',JSON.stringify(state._syncOrdersWorkspace));if(Array.isArray(state?._syncOrdersHistory))localStorage.setItem('los_orders_history',JSON.stringify(state._syncOrdersHistory))}catch(e){console.warn('Cloud Orders workspace restore skipped',e)}__losSyncApplying=false}}}
           const __losOriginalPersist=window.persistHistoryState;
