@@ -131,10 +131,17 @@ jobs:
               }
               if(cloudTime>lastPull+250){
                 __losSyncApplying=true;
+                const oldConfirm=window.confirm;
+                window.confirm=()=>true;
                 try{
                   await window.losCloudPull();
+                  if(state&&state.localStorageData&&typeof state.localStorageData==='object'){
+                    Object.keys(state.localStorageData).forEach(k=>{try{localStorage.setItem(k,typeof state.localStorageData[k]==='string'?state.localStorageData[k]:JSON.stringify(state.localStorageData[k]))}catch(e){}});
+                  }
+                  if(Array.isArray(state?._syncOrdersWorkspace))localStorage.setItem('los_orders_workspace',JSON.stringify(state._syncOrdersWorkspace));
+                  if(Array.isArray(state?._syncOrdersHistory))localStorage.setItem('los_orders_history',JSON.stringify(state._syncOrdersHistory));
                   localStorage.setItem('losStudioCloudLastPullV1',new Date().toISOString());
-                }finally{__losSyncApplying=false}
+                }finally{window.confirm=oldConfirm;__losSyncApplying=false}
               }
             }catch(e){console.warn('LOS automatic cloud reconcile:',e.message)}
           }
@@ -156,10 +163,17 @@ jobs:
               }
               if(cloudTime>lastPull+250){
                 __losSyncApplying=true;
+                const oldConfirm=window.confirm;
+                window.confirm=()=>true;
                 try{
                   await window.losCloudPull();
+                  if(state&&state.localStorageData&&typeof state.localStorageData==='object'){
+                    Object.keys(state.localStorageData).forEach(k=>{try{localStorage.setItem(k,typeof state.localStorageData[k]==='string'?state.localStorageData[k]:JSON.stringify(state.localStorageData[k]))}catch(e){}});
+                  }
+                  if(Array.isArray(state?._syncOrdersWorkspace))localStorage.setItem('los_orders_workspace',JSON.stringify(state._syncOrdersWorkspace));
+                  if(Array.isArray(state?._syncOrdersHistory))localStorage.setItem('los_orders_history',JSON.stringify(state._syncOrdersHistory));
                   localStorage.setItem('losStudioCloudLastPullV1',new Date().toISOString());
-                }finally{__losSyncApplying=false}
+                }finally{window.confirm=oldConfirm;__losSyncApplying=false}
                 return;
               }
               if(__losOriginalSyncNow)return await __losOriginalSyncNow.apply(this,arguments);
