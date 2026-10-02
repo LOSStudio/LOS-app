@@ -1,4 +1,5 @@
 name: Build LOS Studio Android
+# Force a fresh APK build for the current cloud-sync release.
 
 on:
   push:
