@@ -135,7 +135,7 @@ jobs:
           s=s.replace(marker,inject,1)
           p.write_text(s,encoding="utf-8")
           PY
-          echo "SYNC-ONLY PATCH: deterministic push/pull reconciliation"
+          echo "ACCOUNT-CLOUD ARCHITECTURE: one cloud snapshot per signed-in account"
           echo "SYNC PULL APPLY FIX: reload after cloud state application"
           echo "CLEAN V75 DEPLOYMENT"
           wc -c site/LOS_Studio_Acode_v75.html site/index.html
