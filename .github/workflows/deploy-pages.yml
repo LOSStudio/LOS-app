@@ -59,17 +59,22 @@ jobs:
           new="function serialisableState(){const s=JSON.parse(JSON.stringify(state));if(s.info&&Object.prototype.hasOwnProperty.call(s.info,'logoData'))delete s.info.logoData;try{s._syncOrdersWorkspace=JSON.parse(localStorage.getItem('los_orders_workspace')||'null');s._syncOrdersHistory=JSON.parse(localStorage.getItem('los_orders_history')||'null')}catch(e){}return s}"
           if old not in s: raise SystemExit("Sync patch target not found")
           s=s.replace(old,new,1)
-          auto="const origPersist=window.persistHistoryState;"
-          auto_new="const origPersist=window.persistHistoryState;window.addEventListener('storage',function(ev){if(ev.storageArea===localStorage&&['los_orders_workspace','los_orders_history'].includes(ev.key))setTimeout(losCloudSchedulePush,0)});"
-          if auto not in s: raise SystemExit("Auto-sync hook target not found")
-          s=s.replace(auto,auto_new,1)
-          pull="const imported=row.state;if(!imported||typeof imported!=='object')throw new Error('Cloud record is empty or invalid.');"
-          pull_new="const imported=row.state;if(!imported||typeof imported!=='object')throw new Error('Cloud record is empty or invalid.');try{if(Array.isArray(imported._syncOrdersWorkspace))localStorage.setItem('los_orders_workspace',JSON.stringify(imported._syncOrdersWorkspace));if(Array.isArray(imported._syncOrdersHistory))localStorage.setItem('los_orders_history',JSON.stringify(imported._syncOrdersHistory))}catch(e){console.warn('Cloud Orders workspace restore skipped',e)}"
-          if pull not in s: raise SystemExit("Cloud pull target not found")
-          s=s.replace(pull,pull_new,1)
+          marker="const oldSwitch=window.switchView; if(oldSwitch){window.switchView=function(name){oldSwitch(name);if(name==='CloudSync')loadConfig()}}"
+          inject="""const oldSwitch=window.switchView; if(oldSwitch){window.switchView=function(name){oldSwitch(name);if(name==='CloudSync')loadConfig()}}
+          const __losSyncKeys=['los_business_profile','los_inventory','los_packaging','los_history','los_orders','los_orders_workspace','los_orders_history','los_db_customers','los_db_purchases','los_db_adjustments','los_hmrc_expenses_ledger'];
+          let __losSyncApplying=false;
+          const __losSyncSetItem=Storage.prototype.setItem;
+          Storage.prototype.setItem=function(k,v){const r=__losSyncSetItem.call(this,k,v);if(!__losSyncApplying&&this===localStorage&&__losSyncKeys.includes(k))setTimeout(()=>{try{losCloudSchedulePush()}catch(e){}},0);return r};
+          const __losSyncRemoveItem=Storage.prototype.removeItem;
+          Storage.prototype.removeItem=function(k){const r=__losSyncRemoveItem.call(this,k);if(!__losSyncApplying&&this===localStorage&&__losSyncKeys.includes(k))setTimeout(()=>{try{losCloudSchedulePush()}catch(e){}},0);return r};
+          const __losSyncPull=window.losCloudPull;
+          if(__losSyncPull){window.losCloudPull=async function(){__losSyncApplying=true;try{return await __losSyncPull.apply(this,arguments)}finally{try{if(Array.isArray(state?._syncOrdersWorkspace))localStorage.setItem('los_orders_workspace',JSON.stringify(state._syncOrdersWorkspace));if(Array.isArray(state?._syncOrdersHistory))localStorage.setItem('los_orders_history',JSON.stringify(state._syncOrdersHistory))}catch(e){console.warn('Cloud Orders workspace restore skipped',e)}__losSyncApplying=false}}}
+          """
+          if marker not in s: raise SystemExit("Sync hook marker not found")
+          s=s.replace(marker,inject,1)
           p.write_text(s,encoding="utf-8")
           PY
-          echo "SYNC-ONLY PATCH: exclude large local logoData from cloud payload; keep local logo on pull"
+          echo "SYNC-ONLY PATCH: cloud push on same-page local saves; restore Orders workspace after pull"
           echo "CLEAN V75 DEPLOYMENT"
           wc -c site/LOS_Studio_Acode_v75.html site/index.html
       - name: Configure Pages
