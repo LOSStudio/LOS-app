@@ -61,8 +61,8 @@ old_ls = """      parent.postMessage({type:'LOS_V1533_ORDER_SUMMARIES',summaries
 new_ls = """      parent.postMessage({
         type:'LOS_V1533_ORDER_SUMMARIES',
         summaries:buildSummaries(),
-        orders:clone(orders),
-        orderHistory:(function(){try{return clone(JSON.parse(localStorage.getItem('los_orders_history')||'[]'))}catch(e){return []}})()
+        orders:JSON.parse(JSON.stringify(orders)),
+        orderHistory:(function(){try{return JSON.parse(localStorage.getItem('los_orders_history')||'[]')}catch(e){return []}})()
       },'*');"""
 if old_ls not in legacy:
     raise SystemExit("FATAL: embedded sendSummary block not found")
@@ -72,7 +72,7 @@ old_lp = """      applyParentInfo(d.info||{});
       try{
         if(typeof renderMaterials==='function')renderMaterials();"""
 new_lp = """      if(Array.isArray(d.orders)){
-        orders=clone(d.orders);
+        orders=JSON.parse(JSON.stringify(d.orders));
         openIndex=Math.min(Math.max(openIndex,0),Math.max(0,orders.length-1));
         try{localStorage.setItem('los_orders_workspace',JSON.stringify(orders))}catch(e){}
         try{if(typeof loadForm==='function')loadForm();if(typeof renderOrders==='function')renderOrders()}catch(e){}
