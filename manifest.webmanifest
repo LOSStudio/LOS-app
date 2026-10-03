@@ -10,8 +10,8 @@
     "standalone",
     "minimal-ui"
   ],
-  "background_color": "#ffffff",
-  "theme_color": "#ffffff",
+  "background_color": "#fff9fc",
+  "theme_color": "#fff9fc",
   "icons": [
     {
       "src": "/LOS-app/icon-512.png?v=transparent-1",

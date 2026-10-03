@@ -5,6 +5,8 @@ on:
     paths:
       - 'LOS_Studio_V75_icon_fixed.zip'
       - 'manifest.webmanifest'
+      - '.github/scripts/startup-screen.html'
+      - '.github/scripts/auth-resume.js'
       - 'sw.js'
       - 'confirmed.html'
       - 'assets/los-studio-icon.png'
@@ -84,9 +86,11 @@ jobs:
           s=s.replace(marker,inject,1)
           # Keep a normal draggable scrollbar available in desktop browsers.
           scroll_css="""<style id="los-scrollbar-fix">html{scrollbar-width:auto!important;overflow-y:scroll!important}body{scrollbar-width:auto!important;overflow-y:auto!important}::-webkit-scrollbar{width:14px!important;height:14px!important}::-webkit-scrollbar-thumb{min-height:48px!important}</style>"""
-          s=s.replace("</head>",scroll_css+"<style>body.los-auth-locked>*:not(#los-auth-gate),body.los-auth-locked>*:not(#los-auth-gate) *{visibility:hidden!important}</style></head>",1)
+          s=s.replace("</head>",scroll_css+"<style>body.los-auth-locked>*:not(#los-auth-gate):not(#los-startup),body.los-auth-locked>*:not(#los-auth-gate):not(#los-startup) *{visibility:hidden!important}</style></head>",1)
           s=re.sub(r'(?m)^<body(?=[\s>])','<body class="los-auth-locked"',s,count=1)
           if not re.search(r'(?m)^<body class="los-auth-locked"',s): raise SystemExit("Startup authentication lock missing")
+          startup=Path(".github/scripts/startup-screen.html").read_text(encoding="utf-8")
+          s=re.sub(r'(?m)(^<body class="los-auth-locked"[^>]*>)',lambda m:m.group(1)+startup,s,count=1)
           p.write_text(s,encoding="utf-8")
           PY
           echo "ACCOUNT-CLOUD ARCHITECTURE: one cloud snapshot per signed-in account"

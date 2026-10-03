@@ -1,6 +1,7 @@
 // Run after account-sync has initialized its session and hydration state.
 Promise.resolve().then(async function () {
-  if (__losAuthConfirmed || __losAuthRecovery) return;
+  const dismissStartup = () => document.getElementById('los-startup')?.remove();
+  if (__losAuthConfirmed || __losAuthRecovery) { dismissStartup(); return; }
   __losAuthSubmit.disabled = true;
   const style = document.createElement('style');
   style.textContent = '#los-auth-gate[data-restoring] input,#los-auth-gate[data-restoring] button{display:none!important}';
@@ -28,6 +29,7 @@ Promise.resolve().then(async function () {
     __losAuthUnlocked = false;
     failure = error.message || 'Please log in again.';
   } finally {
+    dismissStartup();
     if (__losAuthGate.isConnected) {
       __losAuthGate.removeAttribute('data-restoring');
       controls.forEach(el => el.hidden = false);
