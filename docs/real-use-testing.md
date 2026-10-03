@@ -31,3 +31,7 @@ Existing confirmations, double-tap deletion and undo controls remain. Destructiv
 7. Test printing and delivery-image downloads on the phone and Chromebook.
 
 Automated checks cover these code paths, but real device testing is still needed before a public launch.
+
+## LOS Info recording privacy
+
+LOS Info is hidden on screen by default. Stop recording, then enter your account password to reveal it. Hide LOS Info now locks it immediately; leaving the module, switching accounts, minimising/backgrounding the app or a five-minute timeout also hides it. Password verification requires an internet connection and uses a separate temporary session, leaving the main app sign-in intact. Saved information is not changed. Printed documents and print previews still include the configured business details: avoid filming those screens. This is display privacy, not encryption of local records or backup files.

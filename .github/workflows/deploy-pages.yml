@@ -12,6 +12,7 @@ on:
       - 'confirmed.html'
       - '.github/scripts/account-settings.js'
       - '.github/scripts/app-readiness.js'
+      - '.github/scripts/info-privacy.js'
       - '.github/scripts/deletion-guard.js'
       - '.github/scripts/confirmation.js'
       - 'assets/los-studio-icon.png'
@@ -92,7 +93,7 @@ jobs:
           if old not in s: raise SystemExit("Sync patch target not found")
           s=s.replace(old,new,1)
           marker="const oldSwitch=window.switchView; if(oldSwitch){window.switchView=function(name){oldSwitch(name);if(name==='CloudSync')loadConfig()}}"
-          inject=Path(".github/scripts/sync-merge.js").read_text(encoding="utf-8")+"\n"+Path(".github/scripts/auth-sync.js").read_text(encoding="utf-8")+"\n"+Path(".github/scripts/account-sync.js").read_text(encoding="utf-8")+"\n"+Path(".github/scripts/auth-resume.js").read_text(encoding="utf-8")+"\n"+Path(".github/scripts/account-settings.js").read_text(encoding="utf-8")+"\n"+Path(".github/scripts/app-readiness.js").read_text(encoding="utf-8")
+          inject=Path(".github/scripts/sync-merge.js").read_text(encoding="utf-8")+"\n"+Path(".github/scripts/auth-sync.js").read_text(encoding="utf-8")+"\n"+Path(".github/scripts/account-sync.js").read_text(encoding="utf-8")+"\n"+Path(".github/scripts/auth-resume.js").read_text(encoding="utf-8")+"\n"+Path(".github/scripts/account-settings.js").read_text(encoding="utf-8")+"\n"+Path(".github/scripts/app-readiness.js").read_text(encoding="utf-8")+"\n"+Path(".github/scripts/info-privacy.js").read_text(encoding="utf-8")
           if marker not in s: raise SystemExit("Sync hook marker not found")
           s=s.replace(marker,inject,1)
           # Update every shortcut/favicon link, including the legacy embedded icon.
@@ -101,6 +102,7 @@ jobs:
               if not re.search(r'rel=["\x27](?:icon|shortcut icon|apple-touch-icon)["\x27]',tag,re.I): return tag
               return re.sub(r'href=["\x27][^"\x27]*["\x27]', 'href="icon-512.png?v=transparent-2"', tag)
           s=re.sub(r'<link\b[^>]*>',refresh_icon_link,s,flags=re.I)
+          s=s.replace("</head>",'<style id="los-info-privacy-css">@media screen{#viewInfo:not(.los-info-unlocked)>:not(#los-info-privacy){display:none!important}}@media print{#los-info-privacy{display:none!important}}</style></head>',1)
           # Keep a normal draggable scrollbar available in desktop browsers.
           scroll_css="""<style id="los-scrollbar-fix">html{scrollbar-width:auto!important;overflow-y:scroll!important}body{scrollbar-width:auto!important;overflow-y:auto!important}::-webkit-scrollbar{width:14px!important;height:14px!important}::-webkit-scrollbar-thumb{min-height:48px!important}</style>"""
           s=s.replace("</head>",scroll_css+"<style>body.los-auth-locked>*:not(#los-auth-gate):not(#los-startup),body.los-auth-locked>*:not(#los-auth-gate):not(#los-startup) *{visibility:hidden!important}</style></head>",1)
