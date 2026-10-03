@@ -35,19 +35,10 @@
       color: #173653;
     }
     p {
-      margin: 0 0 18px;
+      margin: 0;
       color: #557089;
       font-size: 1.1rem;
       line-height: 1.45;
-    }
-    a {
-      display: inline-block;
-      padding: 12px 18px;
-      border-radius: 10px;
-      background: #dff3fc;
-      color: #173653;
-      font-weight: 700;
-      text-decoration: none;
     }
   </style>
 </head>
@@ -55,7 +46,6 @@
   <main>
     <h1>Email confirmation</h1>
     <p>Open the confirmation link from your email, then return to the app and log in.</p>
-    <a href="./">Open LOS Studio</a>
   </main>
   <script>
     const params = new URLSearchParams(location.hash.slice(1));
@@ -66,7 +56,7 @@
       document.querySelector('p').textContent = 'This link may have expired or already been used. Return to the app and try logging in. If your email is still unconfirmed, request a new confirmation email.';
     } else if (params.get('type') === 'signup' && params.get('access_token')) {
       document.querySelector('h1').textContent = 'Email confirmed successfully';
-      document.querySelector('p').textContent = 'Your LOS Studio account is ready. Please return to the app and log in.';
+      document.querySelector('p').textContent = 'Your LOS Studio account is ready. Please close this page, open the LOS Studio app, and log in.';
     }
     // Remove credentials from the address without storing a browser session.
     history.replaceState(null, '', location.pathname);
