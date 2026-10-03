@@ -50,6 +50,10 @@ jobs:
           Path("site/icon-512.png").write_bytes(base64.b64decode(m.group(1)))
           PY
           cp site/icon-512.png site/icon-192.png
+          echo "=== V75 initClient source ==="
+          grep -n -A35 -B12 "function initClient" site/LOS_Studio_Acode_v75.html || true
+          echo "=== V75 config references ==="
+          grep -n -A12 -B8 "losStudioCloudConfigV1" site/LOS_Studio_Acode_v75.html | head -n 160 || true
           cmp -s site/LOS_Studio_Acode_v75.html site/index.html
           python3 - <<'PY'
           from pathlib import Path
