@@ -1,0 +1,10 @@
+const fs=require('fs'),assert=require('assert'),{JSDOM}=require('jsdom');
+const dom=new JSDOM('<body><button id="unsafe">Delete record</button><button id="safe" onclick="alreadyConfirmed()">Delete project</button></body>',{runScripts:'dangerously',url:'https://losstudio.github.io/LOS-app/'}),w=dom.window;
+w.HTMLDialogElement.prototype.showModal=function(){this.open=true};w.HTMLDialogElement.prototype.close=function(){this.open=false};
+let deleted=0,confirmations=0;w.losAccountIdentity=()=>w.account;w.account='one';w.document.getElementById('unsafe').onclick=()=>deleted++;w.confirm=()=>{confirmations++;return true};w.alreadyConfirmed=()=>{if(w.confirm('Delete?'))deleted++};w.eval(fs.readFileSync('.github/scripts/deletion-guard.js','utf8'));
+const button=w.document.getElementById('unsafe');button.click();const dialog=w.document.getElementById('los-record-delete-dialog');assert(dialog.open);assert.equal(deleted,0);dialog.querySelector('[data-cancel]').click();assert.equal(deleted,0);
+button.click();dialog.querySelector('[data-delete]').click();assert.equal(deleted,1);assert(!dialog.open);
+w.document.getElementById('safe').click();assert.equal(confirmations,1,'No extra confirmation for an already protected control');assert.equal(deleted,2);
+button.click();w.account='two';dialog.querySelector('[data-delete]').click();assert.equal(deleted,2,'A confirmation opened for another account cannot delete');
+button.click();w.document.body.classList.add('los-auth-locked');dialog.querySelector('[data-delete]').click();assert.equal(deleted,2);
+console.log('PASS: destructive controls require confirmation; Cancel and account changes cannot delete; existing confirmations stay single');dom.window.close();

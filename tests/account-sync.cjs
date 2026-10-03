@@ -10,7 +10,7 @@ async function device(id){
  const errors=[];let callback;const account={id:'account-one',email:'one@example.com'};
  const vc=new VirtualConsole();vc.on('jsdomError',e=>{if(!/Not implemented/.test(e.message))errors.push(e.message)});
  const dom=new JSDOM(html,{url:'https://losstudio.github.io/LOS-app/',runScripts:'dangerously',pretendToBeVisual:true,virtualConsole:vc,beforeParse(w){
-   w.matchMedia=()=>({matches:false});
+   w.matchMedia=()=>({matches:false});w.HTMLDialogElement.prototype.showModal=function(){this.open=true};w.HTMLDialogElement.prototype.close=function(){this.open=false};
    w.indexedDB=new IDBFactory();w.IDBKeyRange=IDBKeyRange;w.TextEncoder=TextEncoder;Object.defineProperty(w,'crypto',{value:webcrypto});w.fetch=async()=>({ok:true});w.Headers=Headers;w.Request=Request;w.Response=Response;w.alert=m=>errors.push('Alert: '+m);w.confirm=()=>true;w.URL.createObjectURL=()=> 'blob:test';w.URL.revokeObjectURL=()=>{};w.scrollTo=()=>{};
    w.localStorage.setItem('losStudioCloudDeviceV1',id);
    w.supabase={createClient(){return {
@@ -45,6 +45,25 @@ async function device(id){
  await a.w.losPutProjectAsset({id:'project-file',projectId:'project',name:'project.pdf',type:'application/pdf',dataUrl:'data:application/pdf;base64,cHJvamVjdC1maWxl'});
  a.w.saveState();await a.w.losCloudSyncNow();await b.w.losCloudSyncNow();
  assert((await b.w.machineFileStore('get','library-pdf'))?.blob,'Library PDF restored');assert.equal((await b.w.getProjectPhoto('project')).dataUrl,'data:image/jpeg;base64,cHJvamVjdA==');assert.equal((await b.w.losGetProjectAsset('project-file')).dataUrl,'data:application/pdf;base64,cHJvamVjdC1maWxl');
+ // Full portable backups include all record collections and actual attachment bytes.
+ a.w.localStorage.setItem('sb-test-auth-token','secret-token-never-export');
+ const portable=await a.w.losCreateFullBackup();assert(portable.payload.files.length>=5);assert(!JSON.stringify(portable).includes('secret-token-never-export'));
+ assert(portable.payload.files.some(f=>f.json.includes('dGVzdA==')),'Photo bytes included');
+ assert(portable.payload.files.some(f=>f.json.includes('__blobData')),'PDF bytes included');
+ await a.w.losValidateFullBackup(portable);
+ const downloads=[];let downloadBlob;a.w.AndroidDownload={saveFile:(data,mime,name)=>downloads.push({data,mime,name})};a.w.URL.createObjectURL=blob=>{downloadBlob=blob;return 'blob:backup-test'};a.w.fetch=async()=>({ok:true,blob:async()=>downloadBlob});a.w.eval(fs.readFileSync('.github/scripts/download-file.js','utf8'));
+ await a.w.exportBackup();await new Promise(r=>setTimeout(r,40));assert.equal(downloads.length,1);assert.equal(downloads[0].mime,'application/json');const downloaded=JSON.parse(Buffer.from(downloads[0].data,'base64').toString());assert.equal(downloaded.payload.accountId,'account-one');assert(downloaded.payload.files.length>=5);assert(!JSON.stringify(downloaded).includes('secret-token-never-export'));
+ await a.w.v75RestoreBackup({files:[new a.w.File([JSON.stringify(portable)],'backup.json',{type:'application/json'})],value:'selected'});assert(a.w.document.getElementById('los-backup-dialog').open);a.w.document.getElementById('los-backup-cancel').click();assert(!a.w.document.getElementById('los-backup-dialog').open);assert.equal(a.w.eval('state.info.phone'),'456','Cancelling restore does not replace data');
+
+ const damaged=clone(portable);damaged.payload.snapshot.info.phone='tampered';await assert.rejects(a.w.losRestoreFullBackup(damaged),/incomplete|changed/);assert.equal(a.w.eval('state.info.phone'),'456');
+ const beforePhone=portable.payload.snapshot.info.phone;a.w.eval("state.info.phone='later-edit';saveState()");await a.w.losCloudSyncNow();
+ await a.w.losRestoreFullBackup(portable);assert.equal(a.w.eval('state.info.phone'),beforePhone);assert.equal(server.rows.get('account-one').state.info.phone,beforePhone);assert((await a.w.getPackagePdf('box')).blob);
+ a.w.__account={id:'account-one',email:'new@example.com'};await a.w.losValidateFullBackup(portable);a.w.__account={id:'account-two',email:'two@example.com'};await assert.rejects(a.w.losValidateFullBackup(portable),/account changed/i);a.w.__account={id:'account-one',email:'one@example.com'};
+ const foreign=clone(portable);foreign.payload.accountId='account-two';await assert.rejects(a.w.losValidateFullBackup(foreign),/different account/);
+ const missing=clone(portable);missing.payload.files=[];missing.checksum=Array.from(new Uint8Array(await webcrypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(missing.payload)))),b=>b.toString(16).padStart(2,'0')).join('');await assert.rejects(a.w.losValidateFullBackup(missing),/missing an attached file/);
+ assert(!a.w.document.getElementById('los-live-sync').hidden);assert(a.w.document.getElementById('los-live-sync').textContent.includes('All changes saved'));
+ a.w.document.getElementById('los-setup-hide').click();assert(a.w.document.getElementById('los-first-use').hidden);a.w.document.getElementById('los-setup-show').click();assert(!a.w.document.getElementById('los-first-use').hidden);
+ await a.w.losCloudSyncNow();
  // Actual timer-driven updates require no manual upload or pull.
  a.w.eval("state.info.website='automatic.example';saveState()");await new Promise(resolve=>setTimeout(resolve,6500));assert.equal(b.w.eval('state.info.website'),'automatic.example','An open device automatically receives the saved change');
  // Offline saves remain local, then are retried on reconnect.
@@ -82,5 +101,5 @@ async function device(id){
  // All modules still open after account initialization.
  const modules=[...new Set([...a.w.document.querySelectorAll('.nav-btn[data-view]')].map(x=>x.dataset.view))];for(const n of modules){a.w.switchView(n);assert(a.w.document.getElementById('view'+n)?.classList.contains('active'),n)}
  assert.deepEqual(a.errors,[]);assert.deepEqual(b.errors,[]);
- console.log('PASS: login hydration, 17 modules, two-device merges, CAS race retry, record deletion, PDF/photo transfer, offline retry, logout and account isolation');
+ console.log('PASS: full backup/restore and ownership, guide, visible sync, login hydration, 17 modules, two-device merges, CAS race retry, record deletion, PDF/photo transfer, offline retry, logout and account isolation');
 })().catch(e=>{console.error(e);process.exitCode=1}).finally(()=>windows.forEach(d=>d.window.close()));
