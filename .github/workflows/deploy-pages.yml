@@ -5,6 +5,7 @@ on:
     paths:
       - 'LOS_Studio_V75_icon_fixed.zip'
       - 'manifest.webmanifest'
+      - '.github/scripts/heart-scroll.js'
       - '.github/scripts/startup-screen.html'
       - '.github/scripts/auth-resume.js'
       - 'sw.js'
@@ -99,6 +100,10 @@ jobs:
           if not re.search(r'(?m)^<body class="los-auth-locked"',s): raise SystemExit("Startup authentication lock missing")
           startup=Path(".github/scripts/startup-screen.html").read_text(encoding="utf-8")
           s=re.sub(r'(?m)(^<body class="los-auth-locked"[^>]*>)',lambda m:m.group(1)+startup,s,count=1)
+          heart="<script>"+Path(".github/scripts/heart-scroll.js").read_text(encoding="utf-8")+"</script>"
+          end=s.rfind("</body>")
+          if end<0: raise SystemExit("App body closing tag missing")
+          s=s[:end]+heart+s[end:]
           p.write_text(s,encoding="utf-8")
           PY
           echo "ACCOUNT-CLOUD ARCHITECTURE: one cloud snapshot per signed-in account"
