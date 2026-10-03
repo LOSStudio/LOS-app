@@ -1,4 +1,4 @@
-const CACHE_NAME = "los-studio-v16";
+const CACHE_NAME = "los-studio-v17-auth";
 const APP_SHELL = ["./", "./manifest.webmanifest", "./sw.js", "./icon-192.png", "./icon-512.png"];
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()));
@@ -9,6 +9,8 @@ self.addEventListener("activate", event => {
 self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;
   const request = event.request;
+  // Supabase tokens and private responses must never enter Cache Storage.
+  if (new URL(request.url).origin !== self.location.origin) return;
   if (request.mode === "navigate") {
     event.respondWith(
       fetch(request).then(response => {
