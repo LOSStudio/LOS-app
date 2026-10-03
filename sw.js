@@ -1,4 +1,4 @@
-const CACHE_NAME = "los-studio-v16";
+const CACHE_NAME = "los-studio-v17";
 const APP_SHELL = ["./", "./manifest.webmanifest", "./sw.js", "./icon-192.png", "./icon-512.png"];
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()));
@@ -9,10 +9,13 @@ self.addEventListener("activate", event => {
 self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;
   const request = event.request;
+  // Cache only this app's static files. Never cache Supabase or other cross-origin responses.
+  if (new URL(request.url).origin !== self.location.origin) return;
   if (request.mode === "navigate") {
     event.respondWith(
       fetch(request).then(response => {
-        const copy = response.clone();
+        if (!response.ok) return response;
+      const copy = response.clone();
         caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
         return response;
       }).catch(() => caches.match(request).then(cached => cached || caches.match("./")))
@@ -21,6 +24,7 @@ self.addEventListener("fetch", event => {
   }
   event.respondWith(
     caches.match(request).then(cached => cached || fetch(request).then(response => {
+      if (!response.ok) return response;
       const copy = response.clone();
       caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
       return response;
