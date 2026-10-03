@@ -10,6 +10,8 @@ on:
       - '.github/scripts/auth-resume.js'
       - 'sw.js'
       - 'confirmed.html'
+      - '.github/scripts/account-settings.js'
+      - '.github/scripts/confirmation.js'
       - 'assets/los-studio-icon.png'
       - '.github/workflows/deploy-pages.yml'
       - '.github/scripts/auth-sync.js'
@@ -62,6 +64,7 @@ jobs:
           cp manifest.webmanifest site/manifest.webmanifest
           cp sw.js site/sw.js
           cp confirmed.html site/confirmed.html
+          cp .github/scripts/confirmation.js site/confirmation.js
           cp node_modules/@supabase/supabase-js/dist/umd/supabase.js site/supabase.js
           cp assets/los-studio-icon.png site/icon-512.png
           cp assets/los-studio-icon.png site/icon-192.png
@@ -84,7 +87,7 @@ jobs:
           if old not in s: raise SystemExit("Sync patch target not found")
           s=s.replace(old,new,1)
           marker="const oldSwitch=window.switchView; if(oldSwitch){window.switchView=function(name){oldSwitch(name);if(name==='CloudSync')loadConfig()}}"
-          inject=Path(".github/scripts/sync-merge.js").read_text(encoding="utf-8")+"\n"+Path(".github/scripts/auth-sync.js").read_text(encoding="utf-8")+"\n"+Path(".github/scripts/account-sync.js").read_text(encoding="utf-8")+"\n"+Path(".github/scripts/auth-resume.js").read_text(encoding="utf-8")
+          inject=Path(".github/scripts/sync-merge.js").read_text(encoding="utf-8")+"\n"+Path(".github/scripts/auth-sync.js").read_text(encoding="utf-8")+"\n"+Path(".github/scripts/account-sync.js").read_text(encoding="utf-8")+"\n"+Path(".github/scripts/auth-resume.js").read_text(encoding="utf-8")+"\n"+Path(".github/scripts/account-settings.js").read_text(encoding="utf-8")
           if marker not in s: raise SystemExit("Sync hook marker not found")
           s=s.replace(marker,inject,1)
           # Update every shortcut/favicon link, including the legacy embedded icon.

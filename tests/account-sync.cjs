@@ -10,6 +10,7 @@ async function device(id){
  const errors=[];let callback;const account={id:'account-one',email:'one@example.com'};
  const vc=new VirtualConsole();vc.on('jsdomError',e=>{if(!/Not implemented/.test(e.message))errors.push(e.message)});
  const dom=new JSDOM(html,{url:'https://losstudio.github.io/LOS-app/',runScripts:'dangerously',pretendToBeVisual:true,virtualConsole:vc,beforeParse(w){
+   w.matchMedia=()=>({matches:false});
    w.indexedDB=new IDBFactory();w.IDBKeyRange=IDBKeyRange;w.TextEncoder=TextEncoder;Object.defineProperty(w,'crypto',{value:webcrypto});w.fetch=async()=>({ok:true});w.Headers=Headers;w.Request=Request;w.Response=Response;w.alert=m=>errors.push('Alert: '+m);w.confirm=()=>true;w.URL.createObjectURL=()=> 'blob:test';w.URL.revokeObjectURL=()=>{};w.scrollTo=()=>{};
    w.localStorage.setItem('losStudioCloudDeviceV1',id);
    w.supabase={createClient(){return {

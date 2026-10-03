@@ -40,26 +40,27 @@
       font-size: 1.1rem;
       line-height: 1.45;
     }
+    form {margin-top:22px} label {display:block;text-align:left;margin:14px 0 6px;font-size:14px}
+    input {width:100%;box-sizing:border-box;border:1px solid #b9dff1;border-radius:12px;padding:13px;font-size:16px;background:#fff;color:#173653}
+    button {width:100%;padding:14px;border:1px solid #edd4e2;border-radius:12px;background:linear-gradient(110deg,#f7c5dc,#c9e7f5);color:#31566e;font-size:16px;margin-top:20px;cursor:pointer}
+    button:disabled {opacity:.65}
+    [hidden] {display:none!important}
   </style>
 </head>
 <body>
   <main>
     <h1>Email confirmation</h1>
-    <p>Open the confirmation link from your email, then return to the app and log in.</p>
+    <p id="confirmation-description">Open the confirmation link from your email, then return to the app and log in.</p>
+    <form id="reset-password-form" hidden>
+      <label for="reset-new-password">New password</label>
+      <input id="reset-new-password" type="password" autocomplete="new-password" minlength="6" required>
+      <label for="reset-confirm-password">Confirm new password</label>
+      <input id="reset-confirm-password" type="password" autocomplete="new-password" minlength="6" required>
+      <button id="reset-password-submit" type="submit">Save new password</button>
+      <p id="reset-password-status" role="status"></p>
+    </form>
   </main>
-  <script>
-    const params = new URLSearchParams(location.hash.slice(1));
-    const query = new URLSearchParams(location.search);
-    const error = params.get('error') || query.get('error');
-    if (error) {
-      document.querySelector('h1').textContent = 'Confirmation link unavailable';
-      document.querySelector('p').textContent = 'This link may have expired or already been used. Return to the app and try logging in. If your email is still unconfirmed, request a new confirmation email.';
-    } else if (params.get('type') === 'signup' && params.get('access_token')) {
-      document.querySelector('h1').textContent = 'Email confirmed successfully';
-      document.querySelector('p').textContent = 'Your LOS Studio account is ready. Please close this page, open the LOS Studio app, and log in.';
-    }
-    // Remove credentials from the address without storing a browser session.
-    history.replaceState(null, '', location.pathname);
-  </script>
+  <script src="./supabase.js"></script>
+  <script src="./confirmation.js"></script>
 </body>
 </html>
