@@ -7,6 +7,7 @@ on:
     paths:
       - "android/**"
       - "LOS_Studio_V75_icon_fixed.zip"
+      - "assets/los-studio-icon.png"
       - ".github/workflows/build-android.yml"
   workflow_dispatch:
 
@@ -30,17 +31,8 @@ jobs:
       - name: Extract exact LOS Studio icon
         shell: bash
         run: |
-          mkdir -p /tmp/los-source
-          unzip -q "LOS_Studio_V75_icon_fixed.zip" -d /tmp/los-source
-          python3 - <<'PY'
-          import base64,re,pathlib
-          html=next(pathlib.Path("/tmp/los-source").rglob("LOS_Studio_Acode_v75.html")).read_text(encoding="utf-8",errors="ignore")
-          m=re.search(r'data:image/png;base64,([A-Za-z0-9+/=]+)',html)
-          if not m: raise SystemExit("Icon not found")
-          p=pathlib.Path("android/app/src/main/res/drawable-nodpi/los_studio_icon.png")
-          p.parent.mkdir(parents=True,exist_ok=True)
-          p.write_bytes(base64.b64decode(m.group(1)))
-          PY
+          mkdir -p android/app/src/main/res/drawable-nodpi
+          cp assets/los-studio-icon.png android/app/src/main/res/drawable-nodpi/los_studio_icon.png
       - name: Build release APK
         shell: bash
         run: |

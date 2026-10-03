@@ -7,6 +7,7 @@ on:
       - 'manifest.webmanifest'
       - 'sw.js'
       - 'confirmed.html'
+      - 'assets/los-studio-icon.png'
       - '.github/workflows/deploy-pages.yml'
       - '.github/scripts/auth-sync.js'
       - '.github/scripts/auth-resume.js'
@@ -59,15 +60,8 @@ jobs:
           cp sw.js site/sw.js
           cp confirmed.html site/confirmed.html
           cp node_modules/@supabase/supabase-js/dist/umd/supabase.js site/supabase.js
-          python3 - <<'PY'
-          from pathlib import Path
-          import re, base64
-          html=Path("site/LOS_Studio_Acode_v75.html").read_text(encoding="utf-8",errors="ignore")
-          m=re.search(r'data:image/png;base64,([A-Za-z0-9+/=]+)',html)
-          if not m: raise SystemExit("V75 embedded logo not found")
-          Path("site/icon-512.png").write_bytes(base64.b64decode(m.group(1)))
-          PY
-          cp site/icon-512.png site/icon-192.png
+          cp assets/los-studio-icon.png site/icon-512.png
+          cp assets/los-studio-icon.png site/icon-192.png
           echo "=== V75 initClient source ==="
           grep -n -A35 -B12 "function initClient" site/LOS_Studio_Acode_v75.html || true
           echo "=== V75 config references ==="

@@ -1,0 +1,15 @@
+#los-auth-gate{background:radial-gradient(ellipse at top left,#fce0ed,transparent 65%),radial-gradient(ellipse at bottom right,#d6effb,transparent 65%),#fff9fc!important;padding:24px 16px;box-sizing:border-box;overflow:auto;color:#31566e;color-scheme:light}
+#los-auth-card{width:min(100%,420px);margin:auto;padding:26px 24px 22px;background:rgba(255,255,255,.94);border:1px solid #edd4e2;border-radius:28px;box-shadow:0 14px 50px #7599ae20;text-align:center;flex-shrink:0}
+#los-auth-logo{display:block;width:116px;height:116px;object-fit:contain;margin:0 auto 14px}
+#los-auth-card h2{font-size:27px;font-weight:500;color:#397b9e;margin:0 0 10px}
+#los-auth-card p{font-size:15px;line-height:1.6;color:#647e8e;margin-bottom:20px;font-weight:400}
+#los-auth-card input{background:#fcfdff;color:#31566e;border:1px solid #c5dfea;border-radius:14px;padding:14px;margin:6px 0;font-family:inherit;font-size:16px;min-width:0}
+#los-auth-card input::placeholder{color:#7b91a1;opacity:1}
+#los-auth-card input:focus{outline:2px solid #ecb4d0;outline-offset:2px}
+#los-auth-card button{font-family:inherit;font-weight:400;cursor:pointer}
+#los-auth-submit{background:linear-gradient(110deg,#f7c5dc,#c9e7f5);color:#31566e;border:1px solid #ddd5e7!important;border-radius:14px!important;min-height:48px}
+#los-auth-submit:disabled{opacity:.65;cursor:wait}
+#los-auth-toggle,#los-auth-forgot{color:#607f96;text-decoration:none;font-size:14px}
+#los-auth-toggle{color:#b45f88;margin-top:14px}
+#los-auth-status{line-height:1.45;text-align:left}
+@media(max-height:650px){#los-auth-logo{width:80px;height:80px;margin-bottom:8px}#los-auth-card{padding:18px 22px}#los-auth-gate{padding:14px}}
