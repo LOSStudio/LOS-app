@@ -4,6 +4,10 @@ import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.print.PrintAttributes;
+import android.print.PrintJob;
+import android.print.PrintManager;
+import android.widget.Toast;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
@@ -28,6 +32,9 @@ public class MainActivity extends Activity {
     private static final String APP_URL = "https://losstudio.github.io/LOS-app/";
 
     private WebView webView;
+    private WebView printView;
+    private PrintJob printJob;
+    private boolean preparingPrint;
     private ValueCallback<Uri[]> filePathCallback;
 
     private static boolean isSupabaseUrl(String url) {
@@ -187,6 +194,13 @@ public class MainActivity extends Activity {
         }
 
         webView.addJavascriptInterface(new SupabaseBridge(), "AndroidSupabase");
+        webView.addJavascriptInterface(new Object() {
+            @JavascriptInterface
+            public void printHtml(String html, String title) {
+                if (html == null || html.length() > 20000000) return;
+                runOnUiThread(() -> printDocument(html, title));
+            }
+        }, "AndroidPrint");
         webView.setWebViewClient(new WebViewClient());
 
         webView.setWebChromeClient(new WebChromeClient() {
@@ -222,6 +236,36 @@ public class MainActivity extends Activity {
         webView.loadUrl(APP_URL);
     }
 
+    private void printDocument(String html, String title) {
+        if (preparingPrint || (printJob != null && !printJob.isCompleted()
+                && !printJob.isCancelled() && !printJob.isFailed())) {
+            Toast.makeText(this, "Finish or cancel the current print job first.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        if (printView != null) printView.destroy();
+        preparingPrint = true;
+        printView = new WebView(this);
+        printView.getSettings().setJavaScriptEnabled(false);
+        final String jobName = title == null || title.trim().isEmpty() ? "LOS Studio Document" : title;
+        printView.setWebViewClient(new WebViewClient() {
+            private boolean started;
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                if (started || isFinishing()) return;
+                started = true;
+                preparingPrint = false;
+                PrintManager manager = (PrintManager) getSystemService(PRINT_SERVICE);
+                if (manager == null) {
+                    Toast.makeText(MainActivity.this, "Android print service is unavailable.", Toast.LENGTH_LONG).show();
+                    return;
+                }
+                printJob = manager.print(jobName, view.createPrintDocumentAdapter(jobName),
+                        new PrintAttributes.Builder().setMediaSize(PrintAttributes.MediaSize.ISO_A4).build());
+            }
+        });
+        printView.loadDataWithBaseURL(APP_URL, html, "text/html", "UTF-8", null);
+    }
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == FILE_CHOOSER_REQUEST) {
@@ -252,6 +296,7 @@ public class MainActivity extends Activity {
         if (webView != null) {
             webView.destroy();
         }
+        if (printView != null) printView.destroy();
         super.onDestroy();
     }
 }

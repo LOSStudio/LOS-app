@@ -1,6 +1,8 @@
 // Build phone print previews before opening them, so an empty tab never suspends the writer.
 (function () {
-  if (!window.matchMedia || !window.matchMedia('(max-width:760px)').matches) return;
+  const nativePrint = window.AndroidPrint && typeof window.AndroidPrint.printHtml === 'function';
+  if (!nativePrint && (!window.matchMedia || !window.matchMedia('(max-width:760px)').matches)) return;
+  if (nativePrint) window.print = () => window.AndroidPrint.printHtml(document.documentElement.outerHTML, document.title || 'LOS Studio Document');
   const openWindow = window.open.bind(window);
   window.open = function (url, target, features) {
     if (url && url !== 'about:blank') return openWindow(url, target, features);
@@ -31,6 +33,12 @@
         writeln(...parts) { html += parts.join('') + '\n'; },
         close() {
           if (closed || !html) return;
+          if (nativePrint) {
+            const parsed = new DOMParser().parseFromString(html, 'text/html');
+            const name = parsed.title || 'LOS Studio Document';
+            window.AndroidPrint.printHtml(html, name);
+            return;
+          }
           const toolbar = '<div id="los-ready-print" style="background:#e1f0f7;color:#1e405e;padding:12px;font-family:Arial,sans-serif"><button type="button" style="font-size:16px;padding:12px 18px" onclick="window.print()">Print / Save PDF</button></div><style>@media print{#los-ready-print{display:none!important}}</style>';
           const ready = /<body\b[^>]*>/i.test(html) ? html.replace(/<body\b[^>]*>/i, m => m + toolbar) : toolbar + html;
           const blob = new Blob([ready], {type:'text/html'});

@@ -20,3 +20,11 @@ for(const mobile of [false,true]){
   w.close();
 }
 console.log('PASS: phone previews open only after preparation, visible Print button, blocked-popup fallback, PDF navigation, desktop unchanged');
+{
+  const dom=new JSDOM('<title>Studio</title><body></body>',{runScripts:'outside-only'}),w=dom.window;
+  const jobs=[];w.AndroidPrint={printHtml:(html,title)=>jobs.push({html,title})};
+  w.open=()=>{throw new Error('Native printing must not open a blank popup')};
+  w.eval(source);const page=w.open('about:blank');page.document.write('<title>Quote</title><body>Ready quote</body>');page.document.close();
+  assert.equal(jobs[0].title,'Quote');assert(jobs[0].html.includes('Ready quote'));w.print();assert.equal(jobs[1].title,'Studio');w.close();
+  console.log('PASS: Android bridge receives prepared print HTML and direct print requests');
+}
