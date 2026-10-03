@@ -5,6 +5,7 @@ import re
 
 p = Path('site/index.html')
 s = p.read_text(encoding='utf-8')
+print_script = '<script>' + Path('.github/scripts/print-window.js').read_text(encoding='utf-8') + '</script>'
 host_css = '''<style id="los-phone-layout">
 @media screen and (max-width:760px){
 html,body{width:100%;max-width:100%;height:auto!important;min-height:100%;}
@@ -69,9 +70,9 @@ m = re.search(r"const LEGACY_ORDERS_HTML_B64\s*=\s*['\"]([^'\"]+)", s)
 if not m:
     raise SystemExit('Embedded Orders workspace not found')
 legacy = base64.b64decode(m.group(1)).decode('utf-8')
-legacy = legacy.replace('</head>', orders_css + '</head>', 1)
+legacy = legacy.replace('</head>', orders_css + print_script + '</head>', 1)
 s = s[:m.start(1)] + base64.b64encode(legacy.encode()).decode() + s[m.end(1):]
-s = s.replace('</head>', host_css + '</head>', 1)
+s = s.replace('</head>', host_css + print_script + '</head>', 1)
 body_end = s.rfind('</body>')
 if body_end < 0:
     raise SystemExit('App body closing tag not found')
