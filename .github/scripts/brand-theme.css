@@ -4,7 +4,7 @@
 html{background:#fff9fc!important;}
 body{background:linear-gradient(135deg,#fff5fa 0%,#fcfbff 48%,#f0f9ff 100%) fixed!important;isolation:isolate;color:var(--ink);}
 body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;background:url('https://losstudio.github.io/LOS-app/icon-512.png?v=transparent-2') center center / min(84vw,84vh,860px) auto no-repeat;opacity:.045;}
-#brandWatermark{display:none!important;}
+#brandWatermark,#viewWelcome::before{display:none!important;}
 .workspace,.app{position:relative;z-index:1;background:transparent!important;}
 .nav-sidebar{position:relative;z-index:2;background:#fffafd!important;}
 .los-phone-bar{position:relative;z-index:3;background:#fffafd!important;}
