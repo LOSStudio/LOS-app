@@ -101,7 +101,7 @@ async function __losDownloadFiles(sb,snapshot,g){
   }
 }
 async function __losFetchRow(sb){const {data,error}=await sb.from('los_studio_sync').select('user_id,state,updated_at,device_id,revision').eq('user_id',__losAccountId).maybeSingle();if(error)throw error;return data}
-function __losEditing(){const el=document.activeElement;return el&&['INPUT','TEXTAREA','SELECT'].includes(el.tagName)&&!el.closest('#los-auth-gate')}
+function __losEditing(){let el=document.activeElement;try{while(el?.tagName==='IFRAME'&&el.contentDocument)el=el.contentDocument.activeElement}catch(e){}return !!(el&&['INPUT','TEXTAREA','SELECT'].includes(el.tagName)&&!el.closest('#los-auth-gate'))}
 async function __losCloudReconcile(force=false){
   if(!__losAuthUnlocked||__losSyncApplying||__losSyncBusy)return;
   if(__losSyncHydrated&&!force&&__losEditing())return;

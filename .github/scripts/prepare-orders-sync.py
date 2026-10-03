@@ -71,7 +71,8 @@ legacy = legacy.replace(old_ls, new_ls, 1)
 old_lp = """      applyParentInfo(d.info||{});
       try{
         if(typeof renderMaterials==='function')renderMaterials();"""
-new_lp = """      if(Array.isArray(d.orders)){
+new_lp = """      const editingOrderField=['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName);
+      if(Array.isArray(d.orders)&&!editingOrderField&&JSON.stringify(d.orders)!==JSON.stringify(orders)){
         orders=JSON.parse(JSON.stringify(d.orders));
         openIndex=Math.min(Math.max(openIndex,0),Math.max(0,orders.length-1));
         try{localStorage.setItem('los_orders_workspace',JSON.stringify(orders))}catch(e){}
@@ -80,8 +81,9 @@ new_lp = """      if(Array.isArray(d.orders)){
       if(Array.isArray(d.orderHistory)){
         try{localStorage.setItem('los_orders_history',JSON.stringify(d.orderHistory))}catch(e){}
       }
-      applyParentInfo(d.info||{});
+      if(!editingOrderField)applyParentInfo(d.info||{});
       try{
+        if(editingOrderField)return;
         if(typeof renderMaterials==='function')renderMaterials();"""
 if old_lp not in legacy:
     raise SystemExit("FATAL: embedded parent message block not found")
