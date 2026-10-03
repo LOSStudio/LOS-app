@@ -17,4 +17,7 @@ workflow = (root / '.github/workflows/deploy-pages.yml').read_text()
 code = workflow.split("          python3 - <<'PY'\n")[-1].split('\n          PY')[0]
 code = '\n'.join(line[10:] for line in code.splitlines())
 exec(compile(code, 'deploy-pages.yml', 'exec'))
+html = (build / 'site/index.html').read_text()
+assert re.search(r'(?m)^<body class="los-auth-locked"', html), 'App must start locked before scripts run'
+assert '/<body class="los-auth-locked"' not in html, 'Do not modify the print helper body pattern'
 print('Exact deployment source patches passed')
