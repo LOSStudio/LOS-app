@@ -7,7 +7,23 @@ p = Path('site/index.html')
 s = p.read_text(encoding='utf-8')
 print_script = '<script>' + Path('.github/scripts/print-window.js').read_text(encoding='utf-8') + '</script>'
 print_script += '<script>' + Path('.github/scripts/download-file.js').read_text(encoding='utf-8') + '</script>'
+# Keep menu branding independent of the business logo used on documents.
+sidebar_start = s.index("  const sidebar = document.getElementById('sidebar-logo-container');", s.index('function refreshStudioLogoDisplays(){'))
+sidebar_end = s.index("  const welcome=document.getElementById('viewWelcome');", sidebar_start)
+s = s[:sidebar_start] + """  const sidebar = document.getElementById('sidebar-logo-container');
+  if(sidebar){
+    sidebar.setAttribute('aria-label','LOS Studio app icon');
+    let img=sidebar.querySelector('img');
+    if(!img){img=document.createElement('img');sidebar.replaceChildren(img);}
+    img.src='icon-512.png?v=transparent-2';
+    img.alt='LOS Studio';
+    img.loading='eager';
+  }
+""" + s[sidebar_end:]
 host_css = '''<style id="los-phone-layout">
+#sidebar-logo-container{min-height:0;padding:16px 0 10px;flex-shrink:0;}
+#sidebar-logo-container img{width:144px;height:144px;max-width:100%;object-fit:contain;mix-blend-mode:normal;}
+@media screen and (max-width:760px){#sidebar-logo-container{padding:12px 0 8px;}#sidebar-logo-container img{width:180px;height:180px;}}
 @media screen and (max-width:760px){
 html,body{width:100%;max-width:100%;height:auto!important;min-height:100%;}
 body{display:block!important;overflow:auto!important;}
