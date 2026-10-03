@@ -1,0 +1,22 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const html=fs.readFileSync('site/index.html','utf8');
+assert.equal(html,fs.readFileSync('site/LOS_Studio_Acode_v75.html','utf8'));
+assert.ok(html.includes('html:not(.los-auth-ready)'));
+const classes=()=>({values:new Set(),add(x){this.values.add(x)},remove(x){this.values.delete(x)}});
+const password={value:'private'},confirm={value:'private'};
+let calls=0;
+const ctx={__losAuthUnlocked:false,__losPushTimer:null,syncTimer:null,__losAuthConfirm:confirm,clearTimeout(){},document:{documentElement:{classList:classes()},body:{classList:classes()},getElementById(){return password}},initClient:()=>({auth:{getUser:async()=>{calls++;return {data:{user:{id:'owner'}}}}}})};
+vm.createContext(ctx);
+vm.runInContext(html.match(/function __losLock\(\).*?(?=\s*window.losCloudSignOut)/s)[0],ctx);
+(async()=>{
+ await ctx.__losUnlock();assert.equal(calls,1);assert.equal(ctx.__losAuthUnlocked,true);assert.equal(password.value,'');
+ ctx.__losLock();assert.equal(ctx.__losAuthUnlocked,false);assert.ok(ctx.document.body.classList.values.has('los-auth-locked'));
+ ctx.initClient=()=>({auth:{getUser:async()=>({data:{user:null},error:Error('expired')})}});
+ await assert.rejects(ctx.__losUnlock(),/expired/);assert.equal(ctx.__losAuthUnlocked,false);
+ let switched=false;ctx.oldSwitch=()=>{switched=true};ctx.window={};ctx.loadConfig=()=>{};
+ vm.runInContext(html.match(/window.switchView=function\(name\)\{if\(!__losAuthUnlocked\).*?\}/)[0],ctx);
+ ctx.window.switchView('Orders');assert.equal(switched,false);
+ ctx.__losAuthUnlocked=true;ctx.window.switchView('Orders');assert.equal(switched,true);
+ assert.ok(fs.readFileSync('sw.js','utf8').includes('new URL(request.url).origin !== self.location.origin'));
+ console.log('PASS: server-validated unlock, expired session, sign-out lock, protected navigation, entry-point parity, private-cache exclusion');
+})();

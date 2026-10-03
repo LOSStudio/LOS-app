@@ -6,6 +6,7 @@ on:
       - 'LOS_Studio_V75_icon_fixed.zip'
       - 'manifest.webmanifest'
       - 'sw.js'
+      - '.github/scripts/patch-auth.py'
       - '.github/workflows/deploy-pages.yml'
   workflow_dispatch:
 permissions:
@@ -149,6 +150,7 @@ jobs:
           s=s.replace("</head>",scroll_css+"</head>",1)
           p.write_text(s,encoding="utf-8")
           PY
+          python3 .github/scripts/patch-auth.py
           echo "ACCOUNT-CLOUD ARCHITECTURE: one cloud snapshot per signed-in account"
           echo "SYNC PULL APPLY FIX: reload after cloud state application"
           echo "CLEAN V75 DEPLOYMENT"
