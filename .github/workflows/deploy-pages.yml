@@ -76,6 +76,7 @@ jobs:
           python3 .github/scripts/prepare-mobile-layout.py
           python3 - <<'PY'
           from pathlib import Path
+          import re
           p=Path("site/index.html")
           s=p.read_text(encoding="utf-8")
           old="function serialisableState(){return JSON.parse(JSON.stringify(state))}"
