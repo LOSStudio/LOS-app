@@ -88,7 +88,7 @@ if(window.AndroidSupabase&&typeof window.AndroidSupabase.request==='function'&&!
                 }
                 localStorage.setItem('losStudioCloudLocalOwnerV1',account.id);
                 if(row){__losApplyCloudSnapshot(row);__losSyncHydrated=true;__losRefreshCloudViews();return}
-                __losSyncHydrated=true;__losRefreshCloudViews();await window.losCloudPush(true);return
+                __losSyncHydrated=true;__losRefreshCloudViews();await __losBasePush(true);return
               }
               if(!row)return;
               const cloudTime=new Date(row.updated_at||0).getTime(),localChange=new Date(localStorage.getItem('losStudioCloudLocalChangeV1')||0).getTime(),lastPull=new Date(localStorage.getItem('losStudioCloudLastPullV1')||0).getTime();
