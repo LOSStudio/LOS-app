@@ -89,3 +89,5 @@ jobs:
           body: Signed LOS Studio Android test build.
           files: android/app/build/outputs/apk/release/LOS-Studio.apk
           generate_release_notes: false
+
+# Fresh Android build trigger 2026-10-03
