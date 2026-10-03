@@ -9,6 +9,10 @@ on:
       - '.github/workflows/deploy-pages.yml'
       - '.github/scripts/auth-sync.js'
       - '.github/scripts/prepare-orders-sync.py'
+      - '.github/scripts/account-sync.js'
+      - '.github/scripts/sync-merge.js'
+      - 'package.json'
+      - 'package-lock.json'
   workflow_dispatch:
 permissions:
   contents: read
@@ -23,6 +27,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pinned cloud SDK
+        run: npm ci --omit=dev --ignore-scripts
       - name: Prepare clean V75 site
         shell: bash
         run: |
@@ -43,6 +52,7 @@ jobs:
           cp site/LOS_Studio_Acode_v75.html site/index.html
           cp manifest.webmanifest site/manifest.webmanifest
           cp sw.js site/sw.js
+          cp node_modules/@supabase/supabase-js/dist/umd/supabase.js site/supabase.js
           python3 - <<'PY'
           from pathlib import Path
           import re, base64
@@ -67,7 +77,7 @@ jobs:
           if old not in s: raise SystemExit("Sync patch target not found")
           s=s.replace(old,new,1)
           marker="const oldSwitch=window.switchView; if(oldSwitch){window.switchView=function(name){oldSwitch(name);if(name==='CloudSync')loadConfig()}}"
-          inject=Path(".github/scripts/auth-sync.js").read_text(encoding="utf-8")
+          inject=Path(".github/scripts/sync-merge.js").read_text(encoding="utf-8")+"\n"+Path(".github/scripts/auth-sync.js").read_text(encoding="utf-8")+"\n"+Path(".github/scripts/account-sync.js").read_text(encoding="utf-8")
           if marker not in s: raise SystemExit("Sync hook marker not found")
           s=s.replace(marker,inject,1)
           # Keep a normal draggable scrollbar available in desktop browsers.

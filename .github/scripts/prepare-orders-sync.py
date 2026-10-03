@@ -95,6 +95,23 @@ s = s[:m.start(1)] + encoded + s[m.end(1):]
 s = s.replace("let currentOrderId = null", "const __losEmptyAccountState=JSON.parse(JSON.stringify(state));\nlet currentOrderId = null", 1)
 # Record successful pushes so later logins can distinguish unsaved local changes.
 s = s.replace("if(error)throw error;setStatus('Uploaded this device", "if(error)throw error;localStorage.setItem('losStudioCloudLastPushV1',payload.updated_at);setStatus('Uploaded this device", 1)
+# Serve the pinned SDK with the app, independent of a floating CDN response.
+s = s.replace('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2', './supabase.js', 1)
 # Branding helper lives in a later script; the first render must not abort startup.
 s = s.replace("  refreshStudioLogoDisplays();", "  if(typeof refreshStudioLogoDisplays==='function')refreshStudioLogoDisplays();", 1)
+
+# Account setup is handled by the gate; normal use never needs project keys or manual pulls.
+start=s.index('<section id="viewCloudSync"')
+end=s.index('</section>',start)+len('</section>')
+s=s[:start]+"""<section id="viewCloudSync" class="screen">
+<h2 class="screen-title">Your Account &amp; Sync</h2>
+<p class="screen-subtitle">Your LOS Studio workspace, available on every device.</p>
+<div class="panel blue"><h3>Automatic account saving</h3><p id="losAccountEmail"></p>
+<p>Sign in with the same account on each device. Saved records, photos and PDFs upload automatically, and open devices check for updates every few seconds.</p>
+<p id="cloudSyncStatus" role="status">Sign in to load your account.</p><span id="cloudSyncBadge" class="badge">Waiting to sync</span>
+<div class="btnrow" style="margin-top:12px"><button class="btn secondary" onclick="losCloudSyncNow()">Retry / Check Sync</button><button class="btn secondary" onclick="losCloudSignOut()">Sign Out</button></div></div>
+<div class="panel pink"><h3>If your connection drops</h3><p>Changes stay on this device and retry automatically when you are back online. Wait for “All changes saved” before closing the app or switching accounts.</p><p>Updates wait while you are typing in an editor. When you save and leave the field, automatic syncing continues.</p></div>
+<div hidden><input id="syncSupabaseUrl"><input id="syncSupabaseKey"><input id="syncEmail"><input id="syncPassword" type="password"><input id="cloudAutoSync" type="checkbox" checked></div>
+</section>"""+s[end:]
+
 p.write_text(s, encoding="utf-8")
