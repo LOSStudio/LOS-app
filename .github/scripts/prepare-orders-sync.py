@@ -89,6 +89,13 @@ if old_lp not in legacy:
     raise SystemExit("FATAL: embedded parent message block not found")
 legacy = legacy.replace(old_lp, new_lp, 1)
 
+# Keep keyboard-driven viewport changes from resizing the embedded workspace.
+legacy = legacy.replace(
+    "  function sendHeight(){\n    try{",
+    "  function sendHeight(){\n    if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;\n    try{",
+    1
+)
+
 encoded = base64.b64encode(legacy.encode("utf-8")).decode("ascii")
 s = s[:m.start(1)] + encoded + s[m.end(1):]
 

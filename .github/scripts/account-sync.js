@@ -48,6 +48,8 @@ function __losFreshState(){const arrays=Object.fromEntries(Object.entries(state)
 function __losNormalise(){normaliseStudioModules();normaliseMachines();normalisePlanner();normaliseProjectStockLinks();normaliseAccountLinks();normaliseBusinessInfo(state.info||{},state.hmrcSettings||{})}
 function __losRefreshCloudViews(){renderAll();if(typeof window.v75RenderAll==='function')window.v75RenderAll();const f=document.getElementById('legacyOrdersFrame');if(f&&f.contentWindow&&typeof syncLegacyOrdersFrame==='function')syncLegacyOrdersFrame()}
 function __losApplyCloudSnapshot(snapshot){
+  // A sync can finish after the user has focused an Orders field.
+  if(__losSyncHydrated&&__losEditing()){__losRetryNeeded=true;return false}
   __losSyncApplying=true;
   try{
     state={...__losFreshState(),...__losClone(snapshot),info:{...__losEmptyAccountState.info,...(snapshot.info||{})}};
@@ -58,6 +60,7 @@ function __losApplyCloudSnapshot(snapshot){
     if(Array.isArray(state.legacyOrderHistory))localStorage.setItem('los_orders_history',JSON.stringify(state.legacyOrderHistory));
     __losNormalise();origPersist(false);__losRefreshCloudViews();
   }finally{__losSyncApplying=false}
+  return true;
 }
 function __losSnapshot(){const snapshot=serialisableState();for(const [k,out] of [['los_orders_workspace','legacyOrders'],['los_orders_history','legacyOrderHistory']]){try{const value=localStorage.getItem(k);if(value)snapshot[out]=JSON.parse(value)}catch(e){}}return snapshot}
 function __losMergeSnapshots(base,local,remote){
@@ -127,7 +130,7 @@ async function __losCloudReconcile(force=false){
       const remote=row?.state||{},revision=Number(row?.revision||0),local=__losSnapshot();
       const merged=__losMergeSnapshots(__losBase||{},local,remote);
       if(LOSSyncMerge.equal(merged,remote)&&row){
-        if(!LOSSyncMerge.equal(local,remote)){await __losDownloadFiles(sb2,remote,g);__losRequireCurrent(g);const latest=__losSnapshot();if(!LOSSyncMerge.equal(latest,local)){__losRetryNeeded=true;return}__losApplyCloudSnapshot(remote)}
+        if(!LOSSyncMerge.equal(local,remote)){await __losDownloadFiles(sb2,remote,g);__losRequireCurrent(g);const latest=__losSnapshot();if(!LOSSyncMerge.equal(latest,local)){__losRetryNeeded=true;return}if(__losApplyCloudSnapshot(remote)===false)return}
         await __losRememberBase(remote,revision,g);__losRetryNeeded=false;setStatus('All changes saved · account synced',true);return;
       }
       const {data,error}=await sb2.rpc('los_studio_commit',{expected_revision:revision,snapshot:merged,device:deviceId});if(error)throw error;__losRequireCurrent(g);
@@ -137,7 +140,7 @@ async function __losCloudReconcile(force=false){
       await __losDownloadFiles(sb2,nextLocal,g);__losRequireCurrent(g);
       // Do not erase edits made while files were downloading.
       const finalLocal=__losMergeSnapshots(latest,__losSnapshot(),nextLocal);
-      if(!LOSSyncMerge.equal(__losSnapshot(),finalLocal))__losApplyCloudSnapshot(finalLocal);
+      if(!LOSSyncMerge.equal(__losSnapshot(),finalLocal)&&__losApplyCloudSnapshot(finalLocal)===false)return;
       await __losRememberBase(accepted,nextRevision,g);__losRetryNeeded=!LOSSyncMerge.equal(finalLocal,accepted);setStatus(__losRetryNeeded?'Saving latest changes…':'All changes saved · account synced',true);return;
     }
     throw new Error('Another device is saving. Your local changes are kept and will retry.');
