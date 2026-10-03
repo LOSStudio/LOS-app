@@ -6,6 +6,7 @@ import re
 p = Path('site/index.html')
 s = p.read_text(encoding='utf-8')
 print_script = '<script>' + Path('.github/scripts/print-window.js').read_text(encoding='utf-8') + '</script>'
+print_script += '<script>' + Path('.github/scripts/download-file.js').read_text(encoding='utf-8') + '</script>'
 host_css = '''<style id="los-phone-layout">
 @media screen and (max-width:760px){
 html,body{width:100%;max-width:100%;height:auto!important;min-height:100%;}

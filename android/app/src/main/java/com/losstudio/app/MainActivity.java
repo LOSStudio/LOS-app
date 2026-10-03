@@ -8,6 +8,8 @@ import android.print.PrintAttributes;
 import android.print.PrintJob;
 import android.print.PrintManager;
 import android.widget.Toast;
+import android.util.Base64;
+import java.io.OutputStream;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
@@ -29,6 +31,8 @@ import java.util.Map;
 
 public class MainActivity extends Activity {
     private static final int FILE_CHOOSER_REQUEST = 1001;
+    private static final int SAVE_DOCUMENT_REQUEST = 1002;
+    private byte[] pendingDownload;
     private static final String APP_URL = "https://losstudio.github.io/LOS-app/";
 
     private WebView webView;
@@ -201,6 +205,31 @@ public class MainActivity extends Activity {
                 runOnUiThread(() -> printDocument(html, title));
             }
         }, "AndroidPrint");
+        webView.addJavascriptInterface(new Object() {
+            @JavascriptInterface
+            public void saveFile(String data, String mime, String name) {
+                if (data == null || data.length() > 70000000) return;
+                final byte[] bytes;
+                try { bytes = Base64.decode(data, Base64.DEFAULT); }
+                catch (IllegalArgumentException error) { return; }
+                runOnUiThread(() -> {
+                    if (pendingDownload != null) {
+                        Toast.makeText(MainActivity.this, "Finish saving the current file first.", Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                    pendingDownload = bytes;
+                    Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    intent.setType(mime == null || mime.isEmpty() ? "application/octet-stream" : mime);
+                    intent.putExtra(Intent.EXTRA_TITLE, name == null || name.isEmpty() ? "LOS-Studio-file" : name.replaceAll("[\\\\/]", "_"));
+                    try { startActivityForResult(intent, SAVE_DOCUMENT_REQUEST); }
+                    catch (Exception error) {
+                        pendingDownload = null;
+                        Toast.makeText(MainActivity.this, "Could not open the file saver.", Toast.LENGTH_LONG).show();
+                    }
+                });
+            }
+        }, "AndroidDownload");
         webView.setWebViewClient(new WebViewClient());
 
         webView.setWebChromeClient(new WebChromeClient() {
@@ -268,6 +297,22 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == SAVE_DOCUMENT_REQUEST) {
+            final byte[] bytes = pendingDownload;
+            pendingDownload = null;
+            if (resultCode == RESULT_OK && data != null && data.getData() != null && bytes != null) {
+                final Uri destination = data.getData();
+                new Thread(() -> {
+                    try (OutputStream output = getContentResolver().openOutputStream(destination)) {
+                        if (output == null) throw new java.io.IOException("File unavailable");
+                        output.write(bytes);
+                        runOnUiThread(() -> Toast.makeText(this, "File saved.", Toast.LENGTH_SHORT).show());
+                    } catch (Exception error) {
+                        runOnUiThread(() -> Toast.makeText(this, "Could not save the file. Please retry.", Toast.LENGTH_LONG).show());
+                    }
+                }).start();
+            }
+        }
         if (requestCode == FILE_CHOOSER_REQUEST) {
             Uri[] results = WebChromeClient.FileChooserParams.parseResult(resultCode, data);
             if (filePathCallback != null) {

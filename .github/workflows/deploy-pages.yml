@@ -13,6 +13,7 @@ on:
       - '.github/scripts/prepare-orders-sync.py'
       - '.github/scripts/prepare-mobile-layout.py'
       - '.github/scripts/print-window.js'
+      - '.github/scripts/download-file.js'
       - '.github/scripts/account-sync.js'
       - '.github/scripts/sync-merge.js'
       - 'package.json'

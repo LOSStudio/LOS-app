@@ -89,6 +89,13 @@ if old_lp not in legacy:
     raise SystemExit("FATAL: embedded parent message block not found")
 legacy = legacy.replace(old_lp, new_lp, 1)
 
+# Tapping an unchanged screen is not a save or a request to rebuild controls.
+legacy = legacy.replace("  document.addEventListener('click',queueUpdate,true);", '', 1)
+legacy = legacy.replace("  document.addEventListener('click', function(){\n    setTimeout(renderDepositQuoteDropdown, 80);\n  });", '', 1)
+legacy = legacy.replace("document.addEventListener('click',()=>{clearTimeout(timer);timer=setTimeout(publishPayments,500)});", '', 1)
+legacy = legacy.replace("document.addEventListener('click',queue,true);", '', 1)
+legacy = legacy.replace("  document.addEventListener('click',function(){\n    setTimeout(keepWorkspaceInMain,30);\n  },true);", '', 1)
+
 # Background data updates must not invoke the legacy screen-opening routine.
 legacy = legacy.replace(
     "if(d.type==='LOS_PARENT_TO_V1533' ||\n       d.type==='LOS_V1533_NEW_ORDER' ||",
