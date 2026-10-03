@@ -5,6 +5,7 @@ import re
 
 p = Path('site/index.html')
 s = p.read_text(encoding='utf-8')
+theme = '<style id="los-brand-theme">' + Path('.github/scripts/brand-theme.css').read_text() + '</style>'
 print_script = '<script>' + Path('.github/scripts/print-window.js').read_text(encoding='utf-8') + '</script>'
 print_script += '<script>' + Path('.github/scripts/download-file.js').read_text(encoding='utf-8') + '</script>'
 # Keep menu branding independent of the business logo used on documents.
@@ -87,9 +88,10 @@ m = re.search(r"const LEGACY_ORDERS_HTML_B64\s*=\s*['\"]([^'\"]+)", s)
 if not m:
     raise SystemExit('Embedded Orders workspace not found')
 legacy = base64.b64decode(m.group(1)).decode('utf-8')
-legacy = legacy.replace('</head>', orders_css + print_script + '</head>', 1)
+legacy = legacy.replace('<body', '<body class="los-orders-theme"', 1)
+legacy = legacy.replace('</head>', orders_css + theme + print_script + '</head>', 1)
 s = s[:m.start(1)] + base64.b64encode(legacy.encode()).decode() + s[m.end(1):]
-s = s.replace('</head>', host_css + print_script + '</head>', 1)
+s = s.replace('</head>', host_css + theme + print_script + '</head>', 1)
 body_end = s.rfind('</body>')
 if body_end < 0:
     raise SystemExit('App body closing tag not found')

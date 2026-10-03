@@ -18,6 +18,7 @@ on:
       - '.github/scripts/auth-resume.js'
       - '.github/scripts/prepare-orders-sync.py'
       - '.github/scripts/prepare-mobile-layout.py'
+      - '.github/scripts/brand-theme.css'
       - '.github/scripts/print-window.js'
       - '.github/scripts/download-file.js'
       - '.github/scripts/account-sync.js'

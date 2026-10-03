@@ -1,0 +1,22 @@
+/* LOS Studio app branding. Screen-only so printed documents keep their templates. */
+@media screen {
+:root{--ink:#244c68;--ink2:#476c86;--muted:#607e94;--paper:#fff9fc;--pink:#fff0f7;--pink2:#f5c6df;--pink3:#ab527d;--blue:#e4f4fc;--blue2:#b8dfef;--softPink:#fff0f7;--softGreen:#e4f4fc;--cream:#fff9fc;--green:#244c68;--line:#d1e5ef;}
+html{background:#fff9fc!important;}
+body{background:linear-gradient(135deg,#fff5fa 0%,#fcfbff 48%,#f0f9ff 100%) fixed!important;isolation:isolate;color:var(--ink);}
+body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;background:url('https://losstudio.github.io/LOS-app/icon-512.png?v=transparent-2') center center / min(84vw,84vh,860px) auto no-repeat;opacity:.045;}
+#brandWatermark{display:none!important;}
+.workspace,.app{position:relative;z-index:1;background:transparent!important;}
+.nav-sidebar{position:relative;z-index:2;background:#fffafd!important;}
+.los-phone-bar{position:relative;z-index:3;background:#fffafd!important;}
+.topbar,.tabs{background:linear-gradient(110deg,rgba(255,245,250,.97),rgba(239,249,255,.97))!important;}
+.panel:not(.pink):not(.blue),.card,.material,.toolbox{background:rgba(255,255,255,.93)!important;border-color:#d3e5ef;}
+.panel.pink,.stat.pink,.quote-card{background:rgba(255,239,247,.95)!important;}
+.panel.blue,.stat.blue{background:rgba(229,245,253,.95)!important;}
+.nav-btn.active-tab{background:#ffe5f2!important;border-color:#edb4d2!important;box-shadow:inset -3px 0 0 #c574a0!important;color:#70405c!important;}
+.tabs button.active,.orderCard.active{background:linear-gradient(110deg,#ffe3f1,#eef5ff)!important;color:#70405c!important;border-color:#eebed7!important;}
+.btn:not(.danger):not(.pink),.addOrder{background:#d9effb!important;color:#244c68!important;border:1px solid #acd5e9!important;}
+.btn.pink{background:#f7d3e7!important;color:#70405c!important;border:1px solid #eab5d0!important;}
+input:focus,select:focus,textarea:focus{outline:2px solid #eab6d3;outline-offset:2px;}
+@media(min-width:761px){body:not(.los-orders-theme)::before{background-position:calc(50% + 110px) center;}}
+}
+@media print{body::before{display:none!important;}}
