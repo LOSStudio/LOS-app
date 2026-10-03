@@ -52,6 +52,26 @@ async function device(id){
  // Sign-out locks and prevents writes. Another account must not inherit records.
  await b.w.losCloudSignOut();assert(b.w.document.body.classList.contains('los-auth-locked'));const before=server.attempts;await b.w.losCloudPush(true);assert.equal(server.attempts,before);
  b.w.__account={id:'account-two',email:'two@example.com'};await b.login();assert.equal(b.w.eval('state.inventory.length'),0);assert.equal(b.w.eval('state.packaging.length'),0);assert.equal(await b.w.getPackagePdf('box'),null,'Other account cannot read the prior account file cache');assert.equal((server.rows.get('account-two').state._cloudFiles||[]).length,0);
+ // Deleting another account clears the local owner and working state.
+ // Returning to the existing account must use its own checkpoint, not merge emptiness.
+ await b.w.losCloudSignOut();
+ b.w.eval('Object.keys(state).forEach(k=>{if(Array.isArray(state[k]))state[k]=[]});state.info={}');b.w.localStorage.removeItem('losStudioCloudLocalOwnerV1');
+ b.w.__account={id:'account-one',email:'renamed@example.com'};
+ await b.login();assert.equal(b.w.eval('state.info.phone'),'offline-change');assert(b.w.eval('state.inventory.length')>0);assert(b.w.eval('state.projects.length')>0);
+ assert(server.rows.get('account-one').state.inventory.length>0,'Deleting a different account must not erase this cloud snapshot');
+ // No local checkpoint: the server is authoritative even if a cached base exists.
+ await b.w.losCloudSignOut();
+ const meta=await new Promise((resolve,reject)=>{const q=b.w.indexedDB.open('LOSStudioCloudMetaV2',1);q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error)});
+ await new Promise(resolve=>{const tx=meta.transaction('accounts','readwrite');tx.objectStore('accounts').delete('account-one:local');tx.oncomplete=resolve});meta.close();
+ b.w.eval('Object.keys(state).forEach(k=>{if(Array.isArray(state[k]))state[k]=[]});state.info={}');b.w.localStorage.removeItem('losStudioCloudLocalOwnerV1');await b.login();
+ assert.equal(b.w.eval('state.info.phone'),'offline-change');assert(b.w.eval('state.inventory.length')>0,'Missing owner/checkpoint must pull, not delete, existing data');
+ // Recovery can list and restore only copies owned by the current immutable ID.
+ const recoveryDB=await new Promise((resolve,reject)=>{const q=b.w.indexedDB.open('LOSStudioCloudMetaV2',1);q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error)});
+ const recovery=clone(server.rows.get('account-one').state);recovery.info.recoveredTest='preserved';
+ await new Promise(resolve=>{const tx=recoveryDB.transaction('accounts','readwrite');tx.objectStore('accounts').put({id:'account-one:recovery-test',state:recovery});tx.oncomplete=resolve});recoveryDB.close();
+ const copies=await b.w.losCloudRecoveryCopies();assert(copies.some(x=>x.id==='account-one:recovery-test'));assert(copies.every(x=>x.id==='account-one'||x.id.startsWith('account-one:')));
+ await assert.rejects(b.w.losCloudRestoreCopy('account-two'),/does not belong/);
+ await b.w.losCloudRestoreCopy('account-one:recovery-test');assert.equal(b.w.eval('state.info.recoveredTest'),'preserved');assert.equal(server.rows.get('account-one').state.info.recoveredTest,'preserved');
  // All modules still open after account initialization.
  const modules=[...new Set([...a.w.document.querySelectorAll('.nav-btn[data-view]')].map(x=>x.dataset.view))];for(const n of modules){a.w.switchView(n);assert(a.w.document.getElementById('view'+n)?.classList.contains('active'),n)}
  assert.deepEqual(a.errors,[]);assert.deepEqual(b.errors,[]);

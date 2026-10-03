@@ -31,7 +31,7 @@ async function __losMigrateLegacyFiles(previous,g){
 }
 const __losStatusPill=document.createElement('div');__losStatusPill.id='los-account-save-status';__losStatusPill.setAttribute('role','status');__losStatusPill.style.cssText='padding:8px 12px;margin:10px;border-radius:12px;background:#edf7fb;font-size:12px;color:#31556b';__losStatusPill.textContent='Sign in to load your account';document.querySelector('.nav-sidebar')?.appendChild(__losStatusPill);
 const __losOriginalStatus=setStatus;setStatus=function(message,saved=false){__losOriginalStatus(message,saved);__losStatusPill.textContent=saved?'All changes saved':message.startsWith('Not fully')?'Sync pending — changes kept on this device':message;const badge=document.getElementById('cloudSyncBadge');if(badge)badge.textContent=saved?'Saved':'Waiting to sync';const email=document.getElementById('losAccountEmail');if(email)email.textContent=__losAccountEmail};
-function __losCloudReset(){if(__losAccountId&&__losSyncHydrated){const pending={id:__losAccountId+':local',state:__losSnapshot()};__losMeta('put',pending).catch(e=>console.warn('Unable to keep account checkpoint:',e.message))}__losGeneration++;__losBase=null;__losRevision=0;__losAccountId=null;__losSyncHydrated=false;__losAuthUnlocked=false;__losRetryNeeded=false;clearTimeout(__losPushTimer)}
+function __losCloudReset(){if(__losAccountId&&__losSyncHydrated){const pending={id:__losAccountId+':local',state:__losSnapshot()};__losMeta('put',pending).catch(e=>console.warn('Unable to keep account checkpoint:',e.message));const size=__losRecoverySize(pending.state);if(size.records||size.details)__losMeta('put',{id:__losAccountId+':last-signed-out',state:pending.state}).catch(e=>console.warn('Unable to keep recovery copy:',e.message))}__losGeneration++;__losBase=null;__losRevision=0;__losAccountId=null;__losSyncHydrated=false;__losAuthUnlocked=false;__losRetryNeeded=false;clearTimeout(__losPushTimer)}
 function __losRequireCurrent(g){if(g!==__losGeneration||!__losAuthUnlocked)throw new Error('Account changed during sync. Please sign in again.')}
 function __losMarkLocalChange(){if(__losSyncApplying)return;__losFileDirty=true;try{localStorage.setItem('losStudioCloudLocalChangeV1',new Date().toISOString())}catch(e){}__losRetryNeeded=true;clearTimeout(__losPushTimer);__losPushTimer=setTimeout(()=>__losCloudReconcile(),1200)}
 function __losPatchSyncRealm(w){try{if(!w||w.__losSyncRealmPatched)return;const st=w.localStorage,proto=w.Storage&&w.Storage.prototype;if(!st||!proto)return;const set=proto.setItem,remove=proto.removeItem,clear=proto.clear;if(![set,remove,clear].every(x=>typeof x==='function'))return;w.__losSyncRealmPatched=true;proto.setItem=function(k,v){const r=set.call(this,k,v);if(!__losSyncApplying&&this===st&&__losIsSyncableStorageKey(k))__losMarkLocalChange();return r};proto.removeItem=function(k){const r=remove.call(this,k);if(!__losSyncApplying&&this===st&&__losIsSyncableStorageKey(k))__losMarkLocalChange();return r};proto.clear=function(){const r=clear.call(this);if(!__losSyncApplying&&this===st)__losMarkLocalChange();return r}}catch(e){}}
@@ -113,14 +113,16 @@ async function __losCloudReconcile(force=false){
     const sb=initClient();
     if(!__losSyncHydrated){
       const account=await user();__losRequireCurrent(g);__losAccountId=account.id;__losAccountEmail=account.email||'';
-      const previous=localStorage.getItem('losStudioCloudLocalOwnerV1'),changed=previous&&previous!==account.id;
+      const previous=localStorage.getItem('losStudioCloudLocalOwnerV1'),sameLocalAccount=previous===account.id,changed=!!previous&&!sameLocalAccount;
       const row=await __losFetchRow(sb),saved=await __losMeta('get',account.id),pending=await __losMeta('get',account.id+':local');__losRequireCurrent(g);
       await __losMigrateLegacyFiles(previous,g);
       if(changed){__losSyncApplying=true;try{state=__losFreshState();const keys=[];for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(__losIsSyncableStorageKey(k))keys.push(k)}keys.forEach(k=>localStorage.removeItem(k));localStorage.removeItem('losStudioBlueprintV1');__losNormalise()}finally{__losSyncApplying=false}}
       localStorage.setItem('losStudioCloudLocalOwnerV1',account.id);
-      let snapshot=changed&&pending?pending.state:__losSnapshot();
-      if(row&&!saved&&!changed)await __losMeta('put',{id:account.id+':before-cloud-upgrade',state:snapshot,revision:0});
-      if(row){snapshot=saved&&(!changed||pending)?__losMergeSnapshots(saved.state,snapshot,row.state):row.state;await __losDownloadFiles(sb,snapshot,g);__losRequireCurrent(g);__losApplyCloudSnapshot(snapshot);await __losRememberBase(row.state,Number(row.revision),g)}
+      // A deleted account can leave no local owner. Never interpret its empty
+      // working copy as deletions in another account's saved cloud data.
+      let snapshot=!sameLocalAccount&&pending?pending.state:__losSnapshot();
+      if(row&&!saved&&sameLocalAccount)await __losMeta('put',{id:account.id+':before-cloud-upgrade',state:snapshot,revision:0});
+      if(row){snapshot=saved&&(sameLocalAccount||pending)?__losMergeSnapshots(saved.state,snapshot,row.state):row.state;await __losDownloadFiles(sb,snapshot,g);__losRequireCurrent(g);__losApplyCloudSnapshot(snapshot);await __losRememberBase(row.state,Number(row.revision),g)}
       else{__losBase={};__losRevision=0;__losApplyCloudSnapshot(snapshot)}
       __losSyncHydrated=true;__losFileDirty=true;
     }
@@ -159,3 +161,26 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)__losCloud
 document.addEventListener('focusout',()=>setTimeout(()=>__losCloudReconcile(),150));
 setInterval(()=>__losCloudReconcile(),5000);
 const oldSwitch=window.switchView;if(oldSwitch)window.switchView=function(name){oldSwitch(name);if(name==='CloudSync')loadConfig()};
+
+// Recovery copies are scoped to the immutable account ID, never to its email.
+function __losRecoverySize(snapshot){
+  const counts=Object.entries(snapshot||{}).filter(([k,v])=>Array.isArray(v)&&!k.startsWith('_')&&k!=='history').reduce((n,[,v])=>n+v.length,0);
+  const details=Object.entries(snapshot?.info||{}).filter(([k,v])=>v!==null&&v!==''&&JSON.stringify(v)!==JSON.stringify(__losEmptyAccountState.info?.[k])).length;
+  return {records:counts,details};
+}
+window.losCloudRecoveryCopies=async function(){
+  const account=__losAccountId,g=__losGeneration;if(!account||!__losSyncHydrated)throw new Error('Sign in and wait for your account to load first.');
+  const db=await __losMetaDB();
+  const rows=await new Promise((resolve,reject)=>{const tx=db.transaction('accounts','readonly'),req=tx.objectStore('accounts').getAll();req.onsuccess=()=>resolve(req.result||[]);req.onerror=()=>reject(req.error);tx.oncomplete=()=>db.close()});
+  __losRequireCurrent(g);
+  return rows.filter(row=>row.id===account||String(row.id).startsWith(account+':')).filter(row=>row.state).map(row=>({id:row.id,...__losRecoverySize(row.state)})).filter(row=>row.records||row.details).sort((a,b)=>(b.records+b.details)-(a.records+a.details));
+};
+window.losCloudRestoreCopy=async function(id){
+  const account=__losAccountId,g=__losGeneration;
+  if(!account||!__losSyncHydrated||!(id===account||String(id).startsWith(account+':')))throw new Error('This copy does not belong to the signed-in account.');
+  const verified=await user();__losRequireCurrent(g);if(verified.id!==account)throw new Error('Please sign in again.');
+  const copy=await __losMeta('get',id);__losRequireCurrent(g);if(!copy?.state)throw new Error('Saved copy unavailable.');
+  await __losMeta('put',{id:account+':before-recovery:'+Date.now(),state:__losSnapshot()});__losRequireCurrent(g);
+  if(__losApplyCloudSnapshot(copy.state)===false)throw new Error('Leave the text field and try again.');
+  __losRetryNeeded=true;__losFileDirty=true;await __losCloudReconcile(true);
+};
