@@ -89,6 +89,18 @@ if old_lp not in legacy:
     raise SystemExit("FATAL: embedded parent message block not found")
 legacy = legacy.replace(old_lp, new_lp, 1)
 
+# An empty account has no selected order. Do not save a missing draft before
+# creating the first order, and let Save Order create a fresh draft if needed.
+for old, new in [
+    ("function newOrder(){saveForm();orders.push(", "function newOrder(){if(current())saveForm();orders.push("),
+    ("function saveForm(){let o=current();", "function saveForm(){let o=current();if(!o)return;"),
+    ("function loadForm(){let o=current();", "function loadForm(){let o=current();if(!o){document.querySelectorAll('input,textarea,select').forEach(el=>{if(el.type==='checkbox'||el.type==='radio')el.checked=el.defaultChecked;else el.value=el.defaultValue||''});return;}"),
+    ("function saveStudio(){savePlanInputs();", "function saveStudio(){if(!current())newOrder();savePlanInputs();"),
+]:
+    if old not in legacy:
+        raise SystemExit('Orders empty-state patch target missing: ' + old)
+    legacy = legacy.replace(old, new, 1)
+
 # Tapping an unchanged screen is not a save or a request to rebuild controls.
 legacy = legacy.replace("  document.addEventListener('click',queueUpdate,true);", '', 1)
 legacy = legacy.replace("  document.addEventListener('click', function(){\n    setTimeout(renderDepositQuoteDropdown, 80);\n  });", '', 1)
