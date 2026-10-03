@@ -6,6 +6,7 @@ on:
       - 'LOS_Studio_V75_icon_fixed.zip'
       - 'manifest.webmanifest'
       - 'sw.js'
+      - 'confirmed.html'
       - '.github/workflows/deploy-pages.yml'
       - '.github/scripts/auth-sync.js'
       - '.github/scripts/prepare-orders-sync.py'
@@ -52,6 +53,7 @@ jobs:
           cp site/LOS_Studio_Acode_v75.html site/index.html
           cp manifest.webmanifest site/manifest.webmanifest
           cp sw.js site/sw.js
+          cp confirmed.html site/confirmed.html
           cp node_modules/@supabase/supabase-js/dist/umd/supabase.js site/supabase.js
           python3 - <<'PY'
           from pathlib import Path
