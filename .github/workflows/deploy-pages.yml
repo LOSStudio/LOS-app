@@ -65,7 +65,7 @@ jobs:
           function __losIsAuthStorageKey(k){const x=String(k||'').toLowerCase();return x.startsWith('sb-')||x.includes('auth-token')||x.includes('supabase.auth')}
           function __losIsSyncableStorageKey(k){return !!k&&!__losSyncMetaKeys.has(k)&&!__losIsAuthStorageKey(k)}
           function __losCollectLocalStorage(){const out={};for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(__losIsSyncableStorageKey(k)){const v=localStorage.getItem(k);if(v!==null)out[k]=v}}return out}
-          let __losSyncApplying=false,__losPushTimer=null;
+          let __losSyncApplying=false,__losPushTimer=null,__losSyncHydrated=false,__losSyncBusy=false;
           function __losMarkLocalChange(){if(__losSyncApplying)return;try{localStorage.setItem('losStudioCloudLocalChangeV1',new Date().toISOString())}catch(e){}clearTimeout(__losPushTimer);__losPushTimer=setTimeout(()=>{try{if(typeof window.losCloudPush==='function')window.losCloudPush(true)}catch(e){}},1500)}
           function __losPatchSyncRealm(w){try{if(!w||w.__losSyncRealmPatched)return;const st=w.localStorage,proto=w.Storage&&w.Storage.prototype;if(!st||!proto)return;w.__losSyncRealmPatched=true;const set=proto.setItem,remove=proto.remove,clear=proto.clear;proto.setItem=function(k,v){const r=set.call(this,k,v);if(!__losSyncApplying&&this===st&&__losIsSyncableStorageKey(k))__losMarkLocalChange();return r};proto.removeItem=function(k){const r=remove.call(this,k);if(!__losSyncApplying&&this===st&&__losIsSyncableStorageKey(k))__losMarkLocalChange();return r};proto.clear=function(){const r=clear.call(this);if(!__losSyncApplying&&this===st)__losMarkLocalChange();return r}}catch(e){}}
           __losPatchSyncRealm(window);
