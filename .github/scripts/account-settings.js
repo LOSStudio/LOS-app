@@ -7,17 +7,19 @@
   document.head.appendChild(css);
   const panel = document.createElement('div');
   panel.id = 'los-account-settings'; panel.className = 'panel pink';
-  panel.innerHTML = '<h3>Account settings</h3><p id="los-settings-email"></p><form id="los-email-form"><label for="los-new-email">New email address</label><input id="los-new-email" type="email" autocomplete="email" required><p>Your orders, photos, files and all other saved information stay in this account. Confirm the change using the links sent to your current and new email addresses.</p><button class="btn secondary" type="submit" id="los-change-email">Change email</button></form><p id="los-email-status" role="status"></p><hr><h3>Delete account</h3><p>Permanently remove your account and its saved information.</p><button class="btn danger" type="button" id="los-delete-open">Delete account</button>';
+  panel.innerHTML = '<h3>Account settings</h3><p id="los-settings-email"></p><form id="los-email-form"><label for="los-new-email">New email address</label><input id="los-new-email" type="email" autocomplete="off" required><label for="los-email-password">Current password</label><input id="los-email-password" type="password" autocomplete="current-password" required><p>Your orders, photos, files and all other saved information stay in this account. Confirm the change using the links sent to your current and new email addresses.</p><button class="btn secondary" type="submit" id="los-change-email">Change email</button></form><p id="los-email-status" role="status"></p><hr><h3>Delete account</h3><p>Permanently remove your account and its saved information.</p><button class="btn danger" type="button" id="los-delete-open">Delete account</button>';
   view.appendChild(panel);
   const dialog = document.createElement('dialog'); dialog.id = 'los-delete-dialog';
   dialog.innerHTML = '<form id="los-delete-form"><h3>Are you sure you want to delete your account?</h3><p>This permanently deletes your account and saved data, including orders, photos and files. This cannot be undone.</p><label for="los-delete-password">Enter your current password to confirm</label><input id="los-delete-password" type="password" autocomplete="current-password" required><p id="los-delete-status" role="status"></p><div class="btnrow"><button type="button" class="btn secondary" id="los-delete-cancel">Cancel</button><button type="submit" class="btn danger" id="los-delete-confirm">Delete account</button></div></form>';
   document.body.appendChild(dialog);
   const el = id => document.getElementById(id);
   let busy = false, displayedAccount = null, deletionAccount = null;
+  function messageSafeDeleteStatus() { el('los-delete-status').textContent = ''; }
   function renderAccount() {
     if (displayedAccount !== __losAccountId) {
       displayedAccount = __losAccountId;
-      el('los-new-email').value = ''; el('los-email-status').textContent = '';
+      el('los-new-email').value = ''; el('los-email-password').value = ''; el('los-email-status').textContent = '';
+      dialog.querySelector('h3').textContent = 'Are you sure you want to delete your account?'; messageSafeDeleteStatus();
       el('los-delete-password').value = ''; deletionAccount = null;
       if (dialog.open && !busy) dialog.close();
     }
@@ -25,6 +27,8 @@
   }
   const previousStatus = setStatus;
   setStatus = function () { const result = previousStatus.apply(this, arguments); renderAccount(); return result; };
+  const previousReset = __losCloudReset;
+  __losCloudReset = function () { const result = previousReset.apply(this, arguments); __losAccountEmail = ''; renderAccount(); el('losAccountEmail').textContent = ''; return result; };
   renderAccount();
   const message = (id, text) => el(id).textContent = text;
   async function refreshEmail() {
@@ -43,7 +47,9 @@
   window.addEventListener('focus', () => { if (view.classList.contains('active')) refreshEmail(); });
   el('los-email-form').addEventListener('submit', async event => {
     event.preventDefault();
-    const input = el('los-new-email'), email = input.value.trim();
+    const accountId = __losAccountId, generation = __losGeneration;
+    const input = el('los-new-email'), email = input.value.trim(), passwordInput = el('los-email-password'), password = passwordInput.value;
+    if (!password) { passwordInput.reportValidity(); return; }
     if (!input.checkValidity() || !email) { input.reportValidity(); return; }
     if (email.toLowerCase() === __losAccountEmail.toLowerCase()) { message('los-email-status', 'Enter a different email address.'); return; }
     const button = el('los-change-email'); button.disabled = true;
@@ -51,13 +57,17 @@
     try {
       const sb = initClient();
       const verified = await sb.auth.getUser();
-      if (verified.error || verified.data?.user?.id !== __losAccountId) throw new Error('Please sign in again before changing your email.');
-      const {error} = await sb.auth.updateUser({email}, {emailRedirectTo: 'https://losstudio.github.io/LOS-app/confirmed.html'});
-      if (error) throw error;
+      if (verified.error || verified.data?.user?.id !== accountId || accountId !== __losAccountId || generation !== __losGeneration) throw new Error('Please sign in again before changing your email.');
+      const {data, error} = await sb.auth.getSession();
+      if (error || !data?.session?.access_token || accountId !== __losAccountId || generation !== __losGeneration) throw new Error('Please sign in again before changing your email.');
+      const response = await fetch('https://nydbklqskvctwxemzoyf.supabase.co/functions/v1/change-email', {method:'POST', headers:{'Content-Type':'application/json', apikey:cfg().key, Authorization:'Bearer '+data.session.access_token}, body:JSON.stringify({email, password})});
+      const result = await response.json();
+      if (accountId !== __losAccountId || generation !== __losGeneration) return;
+      if (!response.ok || result.requested !== true) throw new Error(result.error || 'Email could not be changed.');
       message('los-email-status', 'Check your current and new inboxes and confirm the change. Keep using your current email until both confirmations are complete. Your saved information stays in this account.');
       input.value = ''; await refreshEmail();
-    } catch (error) { message('los-email-status', error.message || 'Email could not be changed. Please try again.'); }
-    finally { button.disabled = false; }
+    } catch (error) { if (accountId === __losAccountId && generation === __losGeneration) message('los-email-status', error.message || 'Email could not be changed. Please try again.'); }
+    finally { passwordInput.value = ''; button.disabled = false; }
   });
   el('los-delete-open').onclick = async () => {
     const button = el('los-delete-open'); button.disabled = true;
