@@ -12,6 +12,7 @@ for script in ['auth-sync.js','account-sync.js','sync-merge.js']:
     shutil.copy(root / '.github/scripts' / script, build / '.github/scripts' / script)
 os.chdir(build)
 exec(compile((root / '.github/scripts/prepare-orders-sync.py').read_text(), 'prepare-orders-sync.py', 'exec'))
+exec(compile((root / '.github/scripts/prepare-mobile-layout.py').read_text(), 'prepare-mobile-layout.py', 'exec'))
 workflow = (root / '.github/workflows/deploy-pages.yml').read_text()
 code = workflow.split("          python3 - <<'PY'\n")[-1].split('\n          PY')[0]
 code = '\n'.join(line[10:] for line in code.splitlines())

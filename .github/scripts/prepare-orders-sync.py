@@ -89,6 +89,13 @@ if old_lp not in legacy:
     raise SystemExit("FATAL: embedded parent message block not found")
 legacy = legacy.replace(old_lp, new_lp, 1)
 
+# Background data updates must not invoke the legacy screen-opening routine.
+legacy = legacy.replace(
+    "if(d.type==='LOS_PARENT_TO_V1533' ||\n       d.type==='LOS_V1533_NEW_ORDER' ||",
+    "if(d.type==='LOS_V1533_NEW_ORDER' ||",
+    1
+)
+
 # Keep keyboard-driven viewport changes from resizing the embedded workspace.
 legacy = legacy.replace(
     "  function sendHeight(){\n    try{",

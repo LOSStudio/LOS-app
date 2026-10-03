@@ -10,6 +10,7 @@ on:
       - '.github/workflows/deploy-pages.yml'
       - '.github/scripts/auth-sync.js'
       - '.github/scripts/prepare-orders-sync.py'
+      - '.github/scripts/prepare-mobile-layout.py'
       - '.github/scripts/account-sync.js'
       - '.github/scripts/sync-merge.js'
       - 'package.json'
@@ -70,6 +71,7 @@ jobs:
           grep -n -A12 -B8 "losStudioCloudConfigV1" site/LOS_Studio_Acode_v75.html | head -n 160 || true
           cmp -s site/LOS_Studio_Acode_v75.html site/index.html
           python3 .github/scripts/prepare-orders-sync.py
+          python3 .github/scripts/prepare-mobile-layout.py
           python3 - <<'PY'
           from pathlib import Path
           p=Path("site/index.html")
