@@ -9,6 +9,7 @@ on:
       - 'confirmed.html'
       - '.github/workflows/deploy-pages.yml'
       - '.github/scripts/auth-sync.js'
+      - '.github/scripts/auth-resume.js'
       - '.github/scripts/prepare-orders-sync.py'
       - '.github/scripts/prepare-mobile-layout.py'
       - '.github/scripts/print-window.js'
@@ -82,12 +83,12 @@ jobs:
           if old not in s: raise SystemExit("Sync patch target not found")
           s=s.replace(old,new,1)
           marker="const oldSwitch=window.switchView; if(oldSwitch){window.switchView=function(name){oldSwitch(name);if(name==='CloudSync')loadConfig()}}"
-          inject=Path(".github/scripts/sync-merge.js").read_text(encoding="utf-8")+"\n"+Path(".github/scripts/auth-sync.js").read_text(encoding="utf-8")+"\n"+Path(".github/scripts/account-sync.js").read_text(encoding="utf-8")
+          inject=Path(".github/scripts/sync-merge.js").read_text(encoding="utf-8")+"\n"+Path(".github/scripts/auth-sync.js").read_text(encoding="utf-8")+"\n"+Path(".github/scripts/account-sync.js").read_text(encoding="utf-8")+"\n"+Path(".github/scripts/auth-resume.js").read_text(encoding="utf-8")
           if marker not in s: raise SystemExit("Sync hook marker not found")
           s=s.replace(marker,inject,1)
           # Keep a normal draggable scrollbar available in desktop browsers.
           scroll_css="""<style id="los-scrollbar-fix">html{scrollbar-width:auto!important;overflow-y:scroll!important}body{scrollbar-width:auto!important;overflow-y:auto!important}::-webkit-scrollbar{width:14px!important;height:14px!important}::-webkit-scrollbar-thumb{min-height:48px!important}</style>"""
-          s=s.replace("</head>",scroll_css+"<style>body.los-auth-locked>*:not(#los-auth-gate){visibility:hidden!important}</style></head>",1)
+          s=s.replace("</head>",scroll_css+"<style>body.los-auth-locked>*:not(#los-auth-gate),body.los-auth-locked>*:not(#los-auth-gate) *{visibility:hidden!important}</style></head>",1)
           s=s.replace("<body",'<body class="los-auth-locked"',1)
           p.write_text(s,encoding="utf-8")
           PY
