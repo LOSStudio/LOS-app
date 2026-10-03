@@ -7,7 +7,7 @@
   document.head.appendChild(css);
   const panel = document.createElement('div');
   panel.id = 'los-account-settings'; panel.className = 'panel pink';
-  panel.innerHTML = '<h3>Account settings</h3><p id="los-settings-email"></p><form id="los-email-form"><label for="los-new-email">New email address</label><input id="los-new-email" type="email" autocomplete="off" required><label for="los-email-password">Current password</label><input id="los-email-password" type="password" autocomplete="current-password" required><p>Your orders, photos, files and all other saved information stay in this account. Confirm the change using the links sent to your current and new email addresses.</p><button class="btn secondary" type="submit" id="los-change-email">Change email</button></form><p id="los-email-status" role="status"></p><hr><h3>Recover saved information</h3><p>If information is missing, check this device for saved copies belonging to your account.</p><button class="btn secondary" type="button" id="los-recovery-check">Check saved copies</button><div id="los-recovery-copies"></div><p id="los-recovery-status" role="status"></p><hr><h3>Delete account</h3><p>Permanently remove your account and its saved information.</p><button class="btn danger" type="button" id="los-delete-open">Delete account</button>';
+  panel.innerHTML = '<h3>Account settings</h3><p id="los-settings-email"></p><form id="los-email-form"><label for="los-new-email">New email address</label><input id="los-new-email" type="email" autocomplete="off" required><label for="los-email-password">Current password</label><input id="los-email-password" type="password" autocomplete="current-password" required><p>Your orders, photos, files and all other saved information stay in this account. Confirm the change using the links sent to your current and new email addresses.</p><button class="btn secondary" type="submit" id="los-change-email">Change email</button></form><p id="los-email-status" role="status"></p><hr><h3>Recover saved information</h3><p>If information is missing, check for cloud and device copies belonging to your account.</p><button class="btn secondary" type="button" id="los-recovery-check">Check saved copies</button><div id="los-recovery-copies"></div><p id="los-recovery-status" role="status"></p><hr><h3>Delete account</h3><p>Permanently remove your account and its saved information.</p><button class="btn danger" type="button" id="los-delete-open">Delete account</button>';
   view.appendChild(panel);
   const dialog = document.createElement('dialog'); dialog.id = 'los-delete-dialog';
   dialog.innerHTML = '<form id="los-delete-form"><h3>Are you sure you want to delete your account?</h3><p>This permanently deletes your account and saved data, including orders, photos and files. This cannot be undone.</p><label for="los-delete-password">Enter your current password to confirm</label><input id="los-delete-password" type="password" autocomplete="current-password" required><p id="los-delete-status" role="status"></p><div class="btnrow"><button type="button" class="btn secondary" id="los-delete-cancel">Cancel</button><button type="submit" class="btn danger" id="los-delete-confirm">Delete account</button></div></form>';
@@ -54,11 +54,13 @@
     if (!input.checkValidity() || !email) { input.reportValidity(); return; }
     if (email.toLowerCase() === __losAccountEmail.toLowerCase()) { message('los-email-status', 'Enter a different email address.'); return; }
     const button = el('los-change-email'); button.disabled = true;
-    message('los-email-status', 'Sending confirmation emails…');
+    message('los-email-status', 'Saving your information and preparing confirmation emails…');
     try {
       const sb = initClient();
       const verified = await sb.auth.getUser();
       if (verified.error || verified.data?.user?.id !== accountId || accountId !== __losAccountId || generation !== __losGeneration) throw new Error('Please sign in again before changing your email.');
+      await __losCloudReconcile(true);
+      if (!__losSyncHydrated || __losRetryNeeded || __losSyncBusy) throw new Error('Wait for All changes saved before changing your email.');
       const {data, error} = await sb.auth.getSession();
       if (error || !data?.session?.access_token || accountId !== __losAccountId || generation !== __losGeneration) throw new Error('Please sign in again before changing your email.');
       const response = await fetch('https://nydbklqskvctwxemzoyf.supabase.co/functions/v1/change-email', {method:'POST', headers:{'Content-Type':'application/json', apikey:cfg().key, Authorization:'Bearer '+data.session.access_token}, body:JSON.stringify({email, password})});
@@ -72,13 +74,13 @@
   });
   el('los-recovery-check').onclick = async () => {
     const account = __losAccountId, button = el('los-recovery-check'); button.disabled = true;
-    el('los-recovery-copies').replaceChildren(); message('los-recovery-status', 'Checking saved copies on this device…');
+    el('los-recovery-copies').replaceChildren(); message('los-recovery-status', 'Checking cloud and device copies…');
     try {
       const copies = await window.losCloudRecoveryCopies(); if (account !== __losAccountId) return;
-      message('los-recovery-status', copies.length ? 'These copies belong to your account. Choose one to restore. This replaces your current information with the selected copy.' : 'No populated saved copies were found on this device. Please check your other device too.');
+      message('los-recovery-status', copies.length ? 'These copies belong to your account. Choose one to restore. This replaces your current information with the selected copy.' : 'No populated cloud or device copies were found. Please check your other device too.');
       for (const copy of copies) {
         const restore = document.createElement('button'); restore.type = 'button'; restore.className = 'btn secondary';
-        restore.textContent = 'Restore copy: ' + copy.records + ' records, ' + copy.details + ' business details';
+        restore.textContent = 'Restore ' + (copy.source || 'device') + ' copy: ' + copy.records + ' records, ' + copy.details + ' business details';
         restore.onclick = async () => {
           if (account !== __losAccountId || !confirm('Restore this saved copy to your current account? Your current information will be kept as a recovery copy first.')) return;
           restore.disabled = true;

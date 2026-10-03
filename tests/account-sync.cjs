@@ -4,7 +4,7 @@ const {webcrypto}=require('crypto');const fs=require('fs'),path=require('path'),
 // Node's structuredClone cannot clone jsdom Blob/File; emulate browser IndexedDB cloning.
 const nativeClone=global.structuredClone;global.structuredClone=function(value){if(value&&typeof value==='object'){const tag=Object.prototype.toString.call(value);if(tag==='[object Blob]'||tag==='[object File]')return value;if(Array.isArray(value))return value.map(global.structuredClone);if(tag==='[object Object]'||Object.getPrototypeOf(value)===null)return Object.fromEntries(Object.entries(value).map(([k,v])=>[k,global.structuredClone(v)]))}return nativeClone(value)};
 const html=fs.readFileSync(path.join(__dirname,'.generated/site/index.html'),'utf8');
-const server={rows:new Map(),files:new Map(),attempts:0};const windows=[];
+const server={rows:new Map(),files:new Map(),recovery:[],attempts:0};const windows=[];
 const clone=v=>JSON.parse(JSON.stringify(v));
 async function device(id){
  const errors=[];let callback;const account={id:'account-one',email:'one@example.com'};
@@ -15,7 +15,7 @@ async function device(id){
    w.localStorage.setItem('losStudioCloudDeviceV1',id);
    w.supabase={createClient(){return {
      auth:{onAuthStateChange(f){callback=f;return {}},getSession:async()=>({data:{session:null}}),getUser:async()=>({data:{user:w.__account||account}}),signInWithPassword:async()=>({data:{session:{user:w.__account||account}}}),signUp:async()=>({data:{session:null}}),signOut:async()=>{if(callback)callback('SIGNED_OUT');return {}},resetPasswordForEmail:async()=>({}),updateUser:async()=>({})},
-     from(){let uid;return {select(){return this},eq(k,v){uid=v;return this},maybeSingle:async()=>({data:clone(server.rows.get(uid)||null)})}},
+     from(table){if(table==='los_studio_recovery'){const filters={};const rows=()=>server.recovery.filter(r=>r.user_id===(w.__account||account).id&&Object.entries(filters).every(([k,v])=>r[k]===v));return {select(){return this},eq(k,v){filters[k]=v;return this},order(){return this},limit:async()=>({data:clone(rows())}),maybeSingle:async()=>({data:clone(rows()[0]||null)})};}let uid;return {select(){return this},eq(k,v){uid=v;return this},maybeSingle:async()=>({data:clone(server.rows.get(uid)||null)})}},
      async rpc(name,args){assert.equal(name,'los_studio_commit');if(w.__offline)return {error:{message:'Network offline'}};const uid=(w.__account||account).id;const current=server.rows.get(uid);server.attempts++;if(w.__raceOnce){w.__raceOnce=false;const row=clone(current);row.state.info.remoteDuringRace='preserved';row.revision++;server.rows.set(uid,row);return {data:{accepted:false,row}}}if((current?.revision||0)!==args.expected_revision)return {data:{accepted:false,row:clone(current)}};const row={user_id:uid,state:clone(args.snapshot),revision:(current?.revision||0)+1,device_id:args.device,updated_at:new Date().toISOString()};server.rows.set(uid,row);return {data:{accepted:true,row:clone(row)}}},
      storage:{from(bucket){assert.equal(bucket,'los-studio-private-files');return {upload:async(p,json)=>{if(w.__offline)return {error:{message:'Network offline'}};assert(p.startsWith((w.__account||account).id+'/'));server.files.set(p,json);return {}},download:async p=>server.files.has(p)?{data:new w.Blob([server.files.get(p)],{type:'application/json'})}:{error:{message:'missing file'}}}}}
    }}};
@@ -72,6 +72,13 @@ async function device(id){
  const copies=await b.w.losCloudRecoveryCopies();assert(copies.some(x=>x.id==='account-one:recovery-test'));assert(copies.every(x=>x.id==='account-one'||x.id.startsWith('account-one:')));
  await assert.rejects(b.w.losCloudRestoreCopy('account-two'),/does not belong/);
  await b.w.losCloudRestoreCopy('account-one:recovery-test');assert.equal(b.w.eval('state.info.recoveredTest'),'preserved');assert.equal(server.rows.get('account-one').state.info.recoveredTest,'preserved');
+ // Cloud recovery stays attached to immutable ID after the email changes.
+ const cloudCopy=clone(recovery);cloudCopy.info.recoveredTest='cloud-preserved';
+ server.recovery.push({user_id:'account-one',revision:42,state:cloudCopy,created_at:new Date().toISOString()});
+ server.recovery.push({user_id:'account-two',revision:99,state:{orders:[{id:'foreign'}]},created_at:new Date().toISOString()});
+ const cloudCopies=await b.w.losCloudRecoveryCopies();assert(cloudCopies.some(x=>x.id==='cloud:42'&&x.source==='Cloud'));assert(!cloudCopies.some(x=>x.id==='cloud:99'));
+ await assert.rejects(b.w.losCloudRestoreCopy('cloud:99'));
+ await b.w.losCloudRestoreCopy('cloud:42');assert.equal(b.w.eval('state.info.recoveredTest'),'cloud-preserved');assert.equal(server.rows.get('account-one').state.info.recoveredTest,'cloud-preserved');
  // All modules still open after account initialization.
  const modules=[...new Set([...a.w.document.querySelectorAll('.nav-btn[data-view]')].map(x=>x.dataset.view))];for(const n of modules){a.w.switchView(n);assert(a.w.document.getElementById('view'+n)?.classList.contains('active'),n)}
  assert.deepEqual(a.errors,[]);assert.deepEqual(b.errors,[]);

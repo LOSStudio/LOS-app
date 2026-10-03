@@ -173,13 +173,21 @@ window.losCloudRecoveryCopies=async function(){
   const db=await __losMetaDB();
   const rows=await new Promise((resolve,reject)=>{const tx=db.transaction('accounts','readonly'),req=tx.objectStore('accounts').getAll();req.onsuccess=()=>resolve(req.result||[]);req.onerror=()=>reject(req.error);tx.oncomplete=()=>db.close()});
   __losRequireCurrent(g);
-  return rows.filter(row=>row.id===account||String(row.id).startsWith(account+':')).filter(row=>row.state).map(row=>({id:row.id,...__losRecoverySize(row.state)})).filter(row=>row.records||row.details).sort((a,b)=>(b.records+b.details)-(a.records+a.details));
+  const cloud = await initClient().from('los_studio_recovery').select('revision,state,created_at').eq('user_id',account).order('created_at',{ascending:false}).limit(10);
+  __losRequireCurrent(g);if(cloud.error)throw cloud.error;
+  const local = rows.filter(row=>row.id===account||String(row.id).startsWith(account+':')).filter(row=>row.state).map(row=>({id:row.id,source:'Device',...__losRecoverySize(row.state)}));
+  const remote = (cloud.data||[]).map(row=>({id:'cloud:'+row.revision,source:'Cloud',createdAt:row.created_at,...__losRecoverySize(row.state)}));
+  return [...remote,...local].filter(row=>row.records||row.details).sort((a,b)=>(b.records+b.details)-(a.records+a.details));
 };
 window.losCloudRestoreCopy=async function(id){
   const account=__losAccountId,g=__losGeneration;
-  if(!account||!__losSyncHydrated||!(id===account||String(id).startsWith(account+':')))throw new Error('This copy does not belong to the signed-in account.');
+  const cloudCopy=/^cloud:[0-9]+$/.test(String(id));
+  if(!account||!__losSyncHydrated||!(cloudCopy||id===account||String(id).startsWith(account+':')))throw new Error('This copy does not belong to the signed-in account.');
   const verified=await user();__losRequireCurrent(g);if(verified.id!==account)throw new Error('Please sign in again.');
-  const copy=await __losMeta('get',id);__losRequireCurrent(g);if(!copy?.state)throw new Error('Saved copy unavailable.');
+  let copy;
+  if(cloudCopy){const result=await initClient().from('los_studio_recovery').select('state').eq('user_id',account).eq('revision',Number(String(id).slice(6))).maybeSingle();if(result.error)throw result.error;copy=result.data;}
+  else copy=await __losMeta('get',id);
+  __losRequireCurrent(g);if(!copy?.state)throw new Error('Saved copy unavailable.');
   await __losMeta('put',{id:account+':before-recovery:'+Date.now(),state:__losSnapshot()});__losRequireCurrent(g);
   if(__losApplyCloudSnapshot(copy.state)===false)throw new Error('Leave the text field and try again.');
   __losRetryNeeded=true;__losFileDirty=true;await __losCloudReconcile(true);

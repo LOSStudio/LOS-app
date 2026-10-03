@@ -22,6 +22,11 @@ export async function changeEmail(req, currentClient, passwordClient) {
     const reauthenticated = await passwordClient.auth.signInWithPassword({email: user.email, password: body.password});
     signedIn = !!reauthenticated.data?.session;
     if (reauthenticated.error || reauthenticated.data?.user?.id !== user.id) return reply(403, {error: 'The current password is incorrect.'});
+    // Save an immutable, owner-only cloud copy before sending any change links.
+    const saved = await passwordClient.from('los_studio_sync').select('state,revision').eq('user_id', user.id).maybeSingle();
+    if (saved.error || !saved.data) return reply(409, {error: 'Your information must finish syncing before changing email. Return to the app, check sync, then try again.'});
+    const backup = await passwordClient.from('los_studio_recovery').insert({user_id:user.id, revision:saved.data.revision, state:saved.data.state});
+    if (backup.error && backup.error.code !== '23505') return reply(503, {error: 'A recovery copy could not be saved. Your email has not changed. Please try again.'});
     const updated = await passwordClient.auth.updateUser({email}, {emailRedirectTo: 'https://losstudio.github.io/LOS-app/confirmed.html'});
     if (updated.error) return reply(400, {error: updated.error.code === 'email_exists' ? 'That email address is already used by another LOS Studio account.' : 'The email change could not be requested. Check the address and try again.'});
     return reply(200, {requested: true});
