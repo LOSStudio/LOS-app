@@ -5,6 +5,8 @@ import re
 
 p = Path('site/index.html')
 s = p.read_text(encoding='utf-8')
+s = s.replace('<button class="nav-btn" data-view="StudioHub">👥 Customers · Suppliers</button>',
+              '<button class="nav-btn" data-view="StudioHub">👥 Studio Management</button>')
 theme = '<style id="los-brand-theme">' + Path('.github/scripts/brand-theme.css').read_text() + '</style>'
 print_script = '<script>' + Path('.github/scripts/print-window.js').read_text(encoding='utf-8') + '</script>'
 print_script += '<script>' + Path('.github/scripts/download-file.js').read_text(encoding='utf-8') + '</script>'
