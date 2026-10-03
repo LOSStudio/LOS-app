@@ -1,0 +1,14 @@
+{
+  "name": "los-studio-verification",
+  "private": true,
+  "scripts": {
+    "test": "python3 tests/build-site.py && node tests/account-sync.cjs && node tests/sync-merge.cjs && node tests/service-worker.cjs && node tests/sdk-transport.cjs"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "6.2.5",
+    "jsdom": "30.1.1"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.117.2"
+  }
+}
