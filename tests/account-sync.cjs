@@ -34,6 +34,16 @@ async function device(id){
  assert.equal(server.attempts,idleCommits,'Idle devices must not ping-pong cloud commits');
  a.w.saveState();await a.w.losCloudSyncNow();
  assert.equal(server.attempts,idleCommits,'Persisting unchanged state must not upload again');
+ // Legacy iframe writes equivalent serialized JSON with another key order.
+ a.w.localStorage.setItem('los_information',JSON.stringify({phone:'123',email:'shop@example.com'}));
+ await a.w.losCloudSyncNow();await b.w.losCloudSyncNow();
+ const legacyCommits=server.attempts;
+ a.w.localStorage.setItem('los_information',JSON.stringify({email:'shop@example.com',phone:'123'}));
+ assert(a.w.document.getElementById('los-live-sync').textContent.includes('All changes saved'),'Equivalent iframe JSON must not flash the saving indicator');
+ await a.w.losCloudSyncNow();assert.equal(server.attempts,legacyCommits);
+ a.w.localStorage.setItem('los_information',JSON.stringify({email:'changed@example.com',phone:'123'}));
+ assert(a.w.document.getElementById('los-live-sync').textContent.includes('Saving changes'),'Actual legacy edit still displays saving');
+ await a.w.losCloudSyncNow();assert(server.attempts>legacyCommits);
  // Different fields edited before either device notices the other's changes.
  a.w.eval("state.info.phone='456';saveState()");b.w.eval("state.info.email='shop@example.com';saveState()");await Promise.all([a.w.losCloudSyncNow(),b.w.losCloudSyncNow()]);await a.w.losCloudSyncNow();await b.w.losCloudSyncNow();
  assert.equal(server.rows.get('account-one').state.info.phone,'456');assert.equal(server.rows.get('account-one').state.info.email,'shop@example.com');assert.equal(a.w.eval('state.info.email'),'shop@example.com');

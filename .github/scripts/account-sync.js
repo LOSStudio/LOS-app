@@ -33,7 +33,15 @@ const __losStatusPill=document.createElement('div');__losStatusPill.id='los-acco
 const __losOriginalStatus=setStatus;setStatus=function(message,saved=false){__losOriginalStatus(message,saved);__losStatusPill.textContent=saved?'All changes saved':message.startsWith('Not fully')?'Sync pending — changes kept on this device':message;const badge=document.getElementById('cloudSyncBadge');if(badge)badge.textContent=saved?'Saved':'Waiting to sync';const email=document.getElementById('losAccountEmail');if(email)email.textContent=__losAccountEmail};
 function __losCloudReset(){if(__losAccountId&&__losSyncHydrated){const pending={id:__losAccountId+':local',state:__losSnapshot()};__losMeta('put',pending).catch(e=>console.warn('Unable to keep account checkpoint:',e.message));const size=__losRecoverySize(pending.state);if(size.records||size.details)__losMeta('put',{id:__losAccountId+':last-signed-out',state:pending.state}).catch(e=>console.warn('Unable to keep recovery copy:',e.message))}__losGeneration++;__losBase=null;__losRevision=0;__losAccountId=null;__losSyncHydrated=false;__losAuthUnlocked=false;__losRetryNeeded=false;clearTimeout(__losPushTimer)}
 function __losRequireCurrent(g){if(g!==__losGeneration||!__losAuthUnlocked)throw new Error('Account changed during sync. Please sign in again.')}
-function __losMarkLocalChange(){if(__losSyncApplying)return;__losFileDirty=true;try{localStorage.setItem('losStudioCloudLocalChangeV1',new Date().toISOString())}catch(e){}__losRetryNeeded=true;clearTimeout(__losPushTimer);__losPushTimer=setTimeout(()=>__losCloudReconcile(),1200)}
+function __losMarkLocalChange(fileChanged=false){
+  if(__losSyncApplying)return false;
+  // Embedded modules can rewrite equivalent JSON or persist during a refresh.
+  // Only actual unsaved values (or committed attachment edits) start a save.
+  if(!fileChanged&&__losSyncHydrated&&__losBase&&LOSSyncMerge.equal(__losMergeSnapshots(__losBase,__losSnapshot(),__losBase),__losBase))return false;
+  __losFileDirty=true;
+  try{localStorage.setItem('losStudioCloudLocalChangeV1',new Date().toISOString())}catch(e){}
+  __losRetryNeeded=true;clearTimeout(__losPushTimer);__losPushTimer=setTimeout(()=>__losCloudReconcile(),1200);return true;
+}
 function __losPatchSyncRealm(w){try{if(!w||w.__losSyncRealmPatched)return;const st=w.localStorage,proto=w.Storage&&w.Storage.prototype;if(!st||!proto)return;const set=proto.setItem,remove=proto.removeItem,clear=proto.clear;if(![set,remove,clear].every(x=>typeof x==='function'))return;w.__losSyncRealmPatched=true;proto.setItem=function(k,v){const changed=this.getItem(k)!==String(v);const r=set.call(this,k,v);if(changed&&!__losSyncApplying&&this===st&&__losIsSyncableStorageKey(k))__losMarkLocalChange();return r};proto.removeItem=function(k){const changed=this.getItem(k)!==null;const r=remove.call(this,k);if(changed&&!__losSyncApplying&&this===st&&__losIsSyncableStorageKey(k))__losMarkLocalChange();return r};proto.clear=function(){const r=clear.call(this);if(!__losSyncApplying&&this===st)__losMarkLocalChange();return r}}catch(e){}}
 __losPatchSyncRealm(window);
 function __losHookSyncIframes(){document.querySelectorAll('iframe').forEach(f=>{try{if(!f.__losSyncLoadHooked){f.__losSyncLoadHooked=true;f.addEventListener('load',()=>__losPatchSyncRealm(f.contentWindow))}if(f.contentDocument)__losPatchSyncRealm(f.contentWindow)}catch(e){}})}
@@ -46,7 +54,7 @@ if(origPersist)window.persistHistoryState=function(){
   return r;
 };
 // Watch committed file writes, including deletions and files whose metadata did not change.
-if(window.IDBObjectStore){for(const method of ['put','add','delete','clear']){const original=IDBObjectStore.prototype[method];IDBObjectStore.prototype[method]=function(){const request=original.apply(this,arguments);if(__losFileStores.some(x=>(x.db===this.transaction.db.name||x.db+'__'+__losAccountId===this.transaction.db.name)&&x.store===this.name)){this.transaction.addEventListener('complete',()=>{if(!__losSyncApplying){__losFileDirty=true;__losMarkLocalChange()}},{once:true})}return request}}}
+if(window.IDBObjectStore){for(const method of ['put','add','delete','clear']){const original=IDBObjectStore.prototype[method];IDBObjectStore.prototype[method]=function(){const request=original.apply(this,arguments);if(__losFileStores.some(x=>(x.db===this.transaction.db.name||x.db+'__'+__losAccountId===this.transaction.db.name)&&x.store===this.name)){this.transaction.addEventListener('complete',()=>{if(!__losSyncApplying){__losFileDirty=true;__losMarkLocalChange(true)}},{once:true})}return request}}}
 function __losMetaDB(){return new Promise((resolve,reject)=>{const req=indexedDB.open('LOSStudioCloudMetaV2',1);req.onupgradeneeded=()=>req.result.createObjectStore('accounts',{keyPath:'id'});req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)})}
 async function __losMeta(op,row){const db=await __losMetaDB();return new Promise((resolve,reject)=>{const tx=db.transaction('accounts',op==='get'?'readonly':'readwrite'),st=tx.objectStore('accounts');const req=op==='get'?st.get(row):st.put(row);let result;req.onsuccess=()=>result=req.result;tx.oncomplete=()=>{db.close();resolve(result)};tx.onerror=tx.onabort=()=>{db.close();reject(tx.error||new Error('Unable to save sync checkpoint'))}})}
 async function __losRememberBase(snapshot,revision,g){__losRequireCurrent(g);const account=__losAccountId;await __losMeta('put',{id:account,state:snapshot,revision});__losRequireCurrent(g);__losBase=__losClone(snapshot);__losRevision=revision}
@@ -149,7 +157,7 @@ async function __losCloudReconcile(force=false){
       // Do not erase edits made while files were downloading.
       const finalLocal=__losMergeSnapshots(latest,__losSnapshot(),nextLocal);
       if(!LOSSyncMerge.equal(__losSnapshot(),finalLocal)&&__losApplyCloudSnapshot(finalLocal)===false)return;
-      await __losRememberBase(accepted,nextRevision,g);__losRetryNeeded=!LOSSyncMerge.equal(finalLocal,accepted);setStatus(__losRetryNeeded?'Saving latest changes…':'All changes saved · account synced',true);return;
+      await __losRememberBase(accepted,nextRevision,g);__losRetryNeeded=!LOSSyncMerge.equal(finalLocal,accepted);setStatus(__losRetryNeeded?'Saving latest changes…':'All changes saved · account synced',!__losRetryNeeded);return;
     }
     throw new Error('Another device is saving. Your local changes are kept and will retry.');
   }catch(e){__losRetryNeeded=true;setStatus('Not fully synced: '+e.message+'. Local changes are kept for retry.');console.warn('LOS automatic account sync:',e.message)}

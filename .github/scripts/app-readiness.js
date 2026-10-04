@@ -7,7 +7,7 @@ const css=document.createElement('style');css.textContent='#los-live-sync{positi
 const status=document.createElement('button');status.id='los-live-sync';status.type='button';status.setAttribute('aria-live','polite');status.onclick=()=>window.switchView('CloudSync');document.body.appendChild(status);
 function syncStatus(message,saved){status.hidden=!__losAuthUnlocked;status.dataset.kind=saved?'saved':'pending';status.textContent=saved?'✓ All changes saved':navigator.onLine===false?'Offline · changes kept on this device':message.startsWith('Not fully')?'Sync needs attention · tap to check':message;status.title=saved?'Open account and sync':message;}
 const oldStatus=setStatus;setStatus=function(message,saved=false){oldStatus.apply(this,arguments);syncStatus(message,saved);renderChecklist()};
-const mark=__losMarkLocalChange;__losMarkLocalChange=function(){mark.apply(this,arguments);if(!__losSyncApplying)syncStatus('Saving changes…',false)};
+const mark=__losMarkLocalChange;__losMarkLocalChange=function(){const changed=mark.apply(this,arguments);if(changed)syncStatus('Saving changes…',false);return changed};
 const reset=__losCloudReset;__losCloudReset=function(){reset.apply(this,arguments);pending=null;say('');el('los-backup-summary').textContent='';el('los-before-restore-download').hidden=true;if(dialog.open)dialog.close();status.hidden=true;renderChecklist()};
 status.hidden=true;
 window.addEventListener('offline',()=>{if(__losAuthUnlocked)setStatus('Offline · changes kept on this device. Saving resumes when you reconnect.')});
