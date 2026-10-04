@@ -42,7 +42,9 @@ async function device(id){
  assert(a.w.document.getElementById('los-live-sync').textContent.includes('All changes saved'),'Equivalent iframe JSON must not flash the saving indicator');
  await a.w.losCloudSyncNow();assert.equal(server.attempts,legacyCommits);
  a.w.localStorage.setItem('los_information',JSON.stringify({email:'changed@example.com',phone:'123'}));
- assert(a.w.document.getElementById('los-live-sync').textContent.includes('Saving changes'),'Actual legacy edit still displays saving');
+ assert(a.w.document.getElementById('los-live-sync').textContent.includes('All changes saved'),'Storage changes alone do not start upload');
+ await a.w.losCloudSyncNow();assert.equal(server.attempts,legacyCommits,'Background checks cannot upload unsaved storage changes');
+ a.w.saveState();assert(a.w.document.getElementById('los-live-sync').textContent.includes('Saving changes'),'Save action schedules actual legacy edit');
  await a.w.losCloudSyncNow();assert(server.attempts>legacyCommits);
  // Different fields edited before either device notices the other's changes.
  a.w.eval("state.info.phone='456';saveState()");b.w.eval("state.info.email='shop@example.com';saveState()");await Promise.all([a.w.losCloudSyncNow(),b.w.losCloudSyncNow()]);await a.w.losCloudSyncNow();await b.w.losCloudSyncNow();

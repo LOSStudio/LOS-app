@@ -44,7 +44,7 @@ new_msg = """  if(d.type==='LOS_V1533_ORDER_SUMMARIES'){
     if(Array.isArray(d.orders))state.legacyOrders=d.orders;
     if(Array.isArray(d.orderHistory))state.legacyOrderHistory=d.orderHistory;
     if(upgradingOrderIds&&historyAuditBaseline)historyAuditBaseline.orderSummaries=state.orderSummaries.map(historyClean);
-    try{persistHistoryState()}catch(e){console.error(e)}
+    try{if(!d.userSaved&&window.losCloudApplyBridgeUpdate)window.losCloudApplyBridgeUpdate(()=>persistHistoryState());else{persistHistoryState();if(window.losCloudRecordSaved)window.losCloudRecordSaved()}}catch(e){console.error(e)}
     renderLegacyOrderStrip();
     renderDashboard();
   }"""
@@ -60,6 +60,7 @@ legacy = base64.b64decode(m.group(1)).decode("utf-8")
 old_ls = """      parent.postMessage({type:'LOS_V1533_ORDER_SUMMARIES',summaries:buildSummaries()},'*');"""
 new_ls = """      parent.postMessage({
         type:'LOS_V1533_ORDER_SUMMARIES',
+        userSaved:!!userSaved,
         summaries:buildSummaries(),
         orders:JSON.parse(JSON.stringify(orders)),
         orderHistory:(function(){try{return JSON.parse(localStorage.getItem('los_orders_history')||'[]')}catch(e){return []}})()
@@ -67,6 +68,8 @@ new_ls = """      parent.postMessage({
 if old_ls not in legacy:
     raise SystemExit("FATAL: embedded sendSummary block not found")
 legacy = legacy.replace(old_ls, new_ls, 1)
+legacy = legacy.replace('function sendSummary(){', 'function sendSummary(userSaved=false){', 1)
+legacy = legacy.replace("if(typeof originalSaveStudio==='function')originalSaveStudio();\n      sendSummary();", "if(typeof originalSaveStudio==='function')originalSaveStudio();\n      sendSummary(true);", 1)
 
 old_lp = """      applyParentInfo(d.info||{});
       try{
@@ -142,7 +145,7 @@ s=s[:start]+"""<section id="viewCloudSync" class="screen">
 <h2 class="screen-title">Your Account &amp; Sync</h2>
 <p class="screen-subtitle">Your LOS Studio workspace, available on every device.</p>
 <div class="panel blue"><h3>Automatic account saving</h3><p id="losAccountEmail"></p>
-<p>Sign in with the same account on each device. Saved records, photos and PDFs upload automatically, and open devices check for updates every few seconds.</p>
+<p>Sign in with the same account on each device. When you press Save, your records, photos and PDFs upload to your account. Background checks only receive updates from your other devices.</p>
 <p id="cloudSyncStatus" role="status">Sign in to load your account.</p><span id="cloudSyncBadge" class="badge">Waiting to sync</span>
 <div class="btnrow" style="margin-top:12px"><button class="btn secondary" onclick="losCloudSyncNow()">Retry / Check Sync</button><button class="btn secondary" onclick="losCloudSignOut()">Sign Out</button></div></div>
 <div class="panel pink"><h3>If your connection drops</h3><p>Changes stay on this device and retry automatically when you are back online. Wait for “All changes saved” before closing the app or switching accounts.</p><p>Updates wait while you are typing in an editor. When you save and leave the field, automatic syncing continues.</p></div>

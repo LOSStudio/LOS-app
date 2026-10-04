@@ -42,19 +42,21 @@ function __losMarkLocalChange(fileChanged=false){
   try{localStorage.setItem('losStudioCloudLocalChangeV1',new Date().toISOString())}catch(e){}
   __losRetryNeeded=true;clearTimeout(__losPushTimer);__losPushTimer=setTimeout(()=>__losCloudReconcile(),1200);return true;
 }
-function __losPatchSyncRealm(w){try{if(!w||w.__losSyncRealmPatched)return;const st=w.localStorage,proto=w.Storage&&w.Storage.prototype;if(!st||!proto)return;const set=proto.setItem,remove=proto.removeItem,clear=proto.clear;if(![set,remove,clear].every(x=>typeof x==='function'))return;w.__losSyncRealmPatched=true;proto.setItem=function(k,v){const changed=this.getItem(k)!==String(v);const r=set.call(this,k,v);if(changed&&!__losSyncApplying&&this===st&&__losIsSyncableStorageKey(k))__losMarkLocalChange();return r};proto.removeItem=function(k){const changed=this.getItem(k)!==null;const r=remove.call(this,k);if(changed&&!__losSyncApplying&&this===st&&__losIsSyncableStorageKey(k))__losMarkLocalChange();return r};proto.clear=function(){const r=clear.call(this);if(!__losSyncApplying&&this===st)__losMarkLocalChange();return r}}catch(e){}}
-__losPatchSyncRealm(window);
-function __losHookSyncIframes(){document.querySelectorAll('iframe').forEach(f=>{try{if(!f.__losSyncLoadHooked){f.__losSyncLoadHooked=true;f.addEventListener('load',()=>__losPatchSyncRealm(f.contentWindow))}if(f.contentDocument)__losPatchSyncRealm(f.contentWindow)}catch(e){}})}
-__losHookSyncIframes();new MutationObserver(__losHookSyncIframes).observe(document.documentElement,{childList:true,subtree:true});
+// Storage and iframe refreshes are local housekeeping, not save requests.
+// Saved module actions below explicitly schedule uploads.
+window.losCloudApplyBridgeUpdate=function(fn){const previous=__losSyncApplying;__losSyncApplying=true;try{return fn()}finally{__losSyncApplying=previous}};
 // Replace the old unconditional push wrapper; an unchanged persist is not an edit.
 if(origPersist)window.persistHistoryState=function(){
   let before;try{before=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null')}catch(e){}
   const r=origPersist.apply(this,arguments);
-  if(!__losSyncApplying&&!LOSSyncMerge.equal(before,state))__losMarkLocalChange();
+  if(!__losSyncApplying&&(!LOSSyncMerge.equal(before,state)||__losFileDirty))__losMarkLocalChange(__losFileDirty);
   return r;
 };
+window.losCloudRecordSaved=()=>__losMarkLocalChange(__losFileDirty);
+const __losOriginalSaveState=window.saveState;
+if(__losOriginalSaveState)window.saveState=function(){const r=__losOriginalSaveState.apply(this,arguments);__losMarkLocalChange(__losFileDirty);return r};
 // Watch committed file writes, including deletions and files whose metadata did not change.
-if(window.IDBObjectStore){for(const method of ['put','add','delete','clear']){const original=IDBObjectStore.prototype[method];IDBObjectStore.prototype[method]=function(){const request=original.apply(this,arguments);if(__losFileStores.some(x=>(x.db===this.transaction.db.name||x.db+'__'+__losAccountId===this.transaction.db.name)&&x.store===this.name)){this.transaction.addEventListener('complete',()=>{if(!__losSyncApplying){__losFileDirty=true;__losMarkLocalChange(true)}},{once:true})}return request}}}
+if(window.IDBObjectStore){for(const method of ['put','add','delete','clear']){const original=IDBObjectStore.prototype[method];IDBObjectStore.prototype[method]=function(){const request=original.apply(this,arguments);if(__losFileStores.some(x=>(x.db===this.transaction.db.name||x.db+'__'+__losAccountId===this.transaction.db.name)&&x.store===this.name)){this.transaction.addEventListener('complete',()=>{if(!__losSyncApplying){__losFileDirty=true}},{once:true})}return request}}}
 function __losMetaDB(){return new Promise((resolve,reject)=>{const req=indexedDB.open('LOSStudioCloudMetaV2',1);req.onupgradeneeded=()=>req.result.createObjectStore('accounts',{keyPath:'id'});req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)})}
 async function __losMeta(op,row){const db=await __losMetaDB();return new Promise((resolve,reject)=>{const tx=db.transaction('accounts',op==='get'?'readonly':'readwrite'),st=tx.objectStore('accounts');const req=op==='get'?st.get(row):st.put(row);let result;req.onsuccess=()=>result=req.result;tx.oncomplete=()=>{db.close();resolve(result)};tx.onerror=tx.onabort=()=>{db.close();reject(tx.error||new Error('Unable to save sync checkpoint'))}})}
 async function __losRememberBase(snapshot,revision,g){__losRequireCurrent(g);const account=__losAccountId;await __losMeta('put',{id:account,state:snapshot,revision});__losRequireCurrent(g);__losBase=__losClone(snapshot);__losRevision=revision}
@@ -63,7 +65,7 @@ function __losNormalise(){normaliseStudioModules();normaliseMachines();normalise
 function __losRefreshCloudViews(){renderAll();if(typeof window.v75RenderAll==='function')window.v75RenderAll();const f=document.getElementById('legacyOrdersFrame');if(f&&f.contentWindow&&typeof syncLegacyOrdersFrame==='function')syncLegacyOrdersFrame()}
 function __losApplyCloudSnapshot(snapshot){
   // A sync can finish after the user has focused an Orders field.
-  if(__losSyncHydrated&&__losEditing()){__losRetryNeeded=true;return false}
+  if(__losSyncHydrated&&__losEditing())return false
   __losSyncApplying=true;
   try{
     state={...__losFreshState(),...__losClone(snapshot),info:{...__losEmptyAccountState.info,...(snapshot.info||{})}};
@@ -139,6 +141,18 @@ async function __losCloudReconcile(force=false){
       if(row){snapshot=saved&&(sameLocalAccount||pending)?__losMergeSnapshots(saved.state,snapshot,row.state):row.state;await __losDownloadFiles(sb,snapshot,g);__losRequireCurrent(g);__losApplyCloudSnapshot(snapshot);await __losRememberBase(row.state,Number(row.revision),g)}
       else{__losBase={};__losRevision=0;__losApplyCloudSnapshot(snapshot)}
       __losSyncHydrated=true;__losFileDirty=true;
+      __losRetryNeeded=__losRevision===0||!LOSSyncMerge.equal(__losMergeSnapshots(__losBase||{},__losSnapshot(),__losBase||{}),__losBase||{});
+    }
+    // Polling receives other-device changes, but never initiates an upload.
+    if(!__losRetryNeeded){
+      const row=await __losFetchRow(sb);__losRequireCurrent(g);
+      if(row&&Number(row.revision)!==__losRevision){
+        const merged=__losMergeSnapshots(__losBase||{},__losSnapshot(),row.state);
+        await __losDownloadFiles(sb,merged,g);__losRequireCurrent(g);
+        if(__losApplyCloudSnapshot(merged)===false)return;
+        await __losRememberBase(row.state,Number(row.revision),g);
+      }
+      setStatus('All changes saved · account synced',true);return;
     }
     const sb2=initClient(),verified=await user();__losRequireCurrent(g);if(verified.id!==__losAccountId){__losCloudReset();throw new Error('Account changed. Sign in again before syncing.')}await __losUploadFiles(sb2,g);__losRequireCurrent(g);
     for(let attempt=0;attempt<4;attempt++){

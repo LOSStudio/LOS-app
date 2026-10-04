@@ -8,12 +8,7 @@ const render=html.match(/  const inventoryRenderKey=[\s\S]*?(?=  syncInventoryCa
 w.eval(render);const image=w.inventoryList.querySelector('img');w.eval(render);
 assert.equal(w.inventoryList.querySelector('img'),image);assert.equal(hydrated,1);
 w.arr[0].updatedAt='2';w.eval(render);assert.equal(hydrated,2,'Changed photo metadata refreshes image');
-w.__losSyncApplying=false;w.__losIsSyncableStorageKey=()=>true;let changes=0;w.__losMarkLocalChange=()=>changes++;
-const source=fs.readFileSync('.github/scripts/account-sync.js','utf8');
-w.eval(source.match(/function __losPatchSyncRealm\(w\)[\s\S]*?(?=\n__losPatchSyncRealm\(window\))/)[0]);
-w.__losPatchSyncRealm(w);w.localStorage.setItem('order','same');w.localStorage.setItem('order','same');
-assert.equal(changes,1);w.localStorage.removeItem('missing');assert.equal(changes,1);
-w.localStorage.setItem('order','new');assert.equal(changes,2);dom.window.close();
+dom.window.close();
 const auth=fs.readFileSync('.github/scripts/auth-sync.js','utf8').split("document.body.classList.add('los-auth-locked')")[0];
 const pending=[];const win={fetch:async()=>new Response('browser'),AndroidSupabase:{request(){throw Error('Blocking path used')},requestAsync(id,url,json){pending.push({id,url,json})}}};
 vm.runInNewContext(auth,{window:win,Request,Response,Map,setTimeout,clearTimeout,TypeError,JSON});
@@ -24,5 +19,5 @@ vm.runInNewContext(auth,{window:win,Request,Response,Map,setTimeout,clearTimeout
  win.__losNativeResponse(pending[0].id,JSON.stringify({status:200,body:'first'}));
  assert.equal(await (await first).text(),'first');assert.equal(await (await second).text(),'second');
  assert.equal(win.__losNativePending.size,0);
- console.log('PASS: unchanged Inventory preserves photo DOM; identical storage writes do not restart sync; native requests yield and resolve independently');
+ console.log('PASS: unchanged Inventory preserves photo DOM; native requests yield and resolve independently');
 })().catch(e=>{console.error(e);process.exitCode=1});

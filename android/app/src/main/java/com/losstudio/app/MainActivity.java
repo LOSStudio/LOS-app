@@ -300,7 +300,8 @@ public class MainActivity extends Activity {
             }
         });
 
-        webView.loadUrl(APP_URL);
+        // A fresh navigation prevents cached HTML from hiding deployed fixes.
+        webView.loadUrl(APP_URL + "?launch=" + System.currentTimeMillis());
     }
 
     private void printDocument(String html, String title) {
