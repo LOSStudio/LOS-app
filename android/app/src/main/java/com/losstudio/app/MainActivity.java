@@ -2,6 +2,10 @@ package com.losstudio.studio2026;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.content.ClipData;
+import android.provider.MediaStore;
+import androidx.core.content.FileProvider;
+import java.io.File;
 import android.net.Uri;
 import android.os.Bundle;
 import android.print.PrintAttributes;
@@ -32,6 +36,7 @@ import java.util.Map;
 public class MainActivity extends Activity {
     private static final int FILE_CHOOSER_REQUEST = 1001;
     private static final int SAVE_DOCUMENT_REQUEST = 1002;
+    private Uri cameraPhotoUri;
     private byte[] pendingDownload;
     private static final String APP_URL = "https://losstudio.github.io/LOS-app/";
 
@@ -245,12 +250,33 @@ public class MainActivity extends Activity {
                 filePathCallback = callback;
 
                 try {
-                    Intent intent = params.createIntent();
+                    Intent intent;
+                    if (params.isCaptureEnabled()) {
+                        File directory = new File(getCacheDir(), "inventory-camera");
+                        directory.mkdirs();
+                        // Previous captures are temporary; the web app stores its own photo copy.
+                        File[] oldPhotos = directory.listFiles();
+                        if (oldPhotos != null) for (File old : oldPhotos) old.delete();
+                        File photo = File.createTempFile("inventory-", ".jpg", directory);
+                        cameraPhotoUri = FileProvider.getUriForFile(MainActivity.this,
+                                getPackageName() + ".camera", photo);
+                        intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+                        intent.putExtra(MediaStore.EXTRA_OUTPUT, cameraPhotoUri);
+                        intent.setClipData(ClipData.newRawUri("Inventory photo", cameraPhotoUri));
+                        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                    } else {
+                        cameraPhotoUri = null;
+                        intent = params.createIntent();
+                    }
                     startActivityForResult(intent, FILE_CHOOSER_REQUEST);
                     return true;
                 } catch (Exception e) {
+                    filePathCallback.onReceiveValue(null);
                     filePathCallback = null;
-                    return false;
+                    cameraPhotoUri = null;
+                    Toast.makeText(MainActivity.this, "Camera or file picker unavailable. Please use Add image.", Toast.LENGTH_LONG).show();
+                    return true;
                 }
             }
         });
@@ -314,7 +340,10 @@ public class MainActivity extends Activity {
             }
         }
         if (requestCode == FILE_CHOOSER_REQUEST) {
-            Uri[] results = WebChromeClient.FileChooserParams.parseResult(resultCode, data);
+            Uri[] results = cameraPhotoUri != null
+                    ? (resultCode == RESULT_OK ? new Uri[]{cameraPhotoUri} : null)
+                    : WebChromeClient.FileChooserParams.parseResult(resultCode, data);
+            cameraPhotoUri = null;
             if (filePathCallback != null) {
                 filePathCallback.onReceiveValue(results);
                 filePathCallback = null;

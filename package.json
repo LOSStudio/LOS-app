@@ -2,7 +2,7 @@
   "name": "los-studio-verification",
   "private": true,
   "scripts": {
-    "test": "python3 tests/build-site.py && node tests/account-sync.cjs && node tests/orders-empty-account.cjs && node tests/deletion-guard.cjs && node tests/download-file.cjs && node tests/print-window.cjs && node tests/info-privacy.cjs && node tests/account-settings.cjs && node tests/change-email.cjs && node tests/delete-account.cjs && node tests/sync-merge.cjs && node tests/service-worker.cjs && node tests/sdk-transport.cjs && node tests/confirmation.cjs && node tests/heart-scroll.cjs"
+    "test": "python3 tests/build-site.py && node tests/account-sync.cjs && node tests/orders-empty-account.cjs && node tests/inventory-camera.cjs && node tests/deletion-guard.cjs && node tests/download-file.cjs && node tests/print-window.cjs && node tests/info-privacy.cjs && node tests/account-settings.cjs && node tests/change-email.cjs && node tests/delete-account.cjs && node tests/sync-merge.cjs && node tests/service-worker.cjs && node tests/sdk-transport.cjs && node tests/confirmation.cjs && node tests/heart-scroll.cjs"
   },
   "devDependencies": {
     "fake-indexeddb": "6.2.5",

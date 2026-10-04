@@ -7,6 +7,21 @@ p = Path('site/index.html')
 s = p.read_text(encoding='utf-8')
 s = s.replace('<button class="nav-btn" data-view="StudioHub">👥 Customers · Suppliers</button>',
               '<button class="nav-btn" data-view="StudioHub">👥 Studio Management</button>')
+# Camera selection feeds the existing photo preview/save pipeline.
+s = s.replace('<input id="invPhoto" type="file" accept="image/*" onchange="previewInventoryPhoto()">',
+    '''<input id="invPhoto" type="file" accept="image/*" onchange="previewInventoryPhoto()">
+          <input id="invCamera" type="file" accept="image/*" capture="environment" hidden onchange="selectInventoryCameraPhoto(this)">
+          <button type="button" class="btn secondary" style="margin-top:8px" onclick="document.getElementById('invCamera').value='';document.getElementById('invCamera').click()">📷 Open camera</button>''')
+s = s.replace('function previewInventoryPhoto(){', '''function selectInventoryCameraPhoto(input){
+  const file=input.files&&input.files[0];
+  if(!file)return;
+  if(!file.type.startsWith('image/')){alert('Please take an image.');return;}
+  try{
+    const transfer=new DataTransfer();transfer.items.add(file);
+    invPhoto.files=transfer.files;previewInventoryPhoto();
+  }catch(error){alert('This device could not attach the camera photo. Please use Add image.');}
+}
+function previewInventoryPhoto(){''')
 theme = '<style id="los-brand-theme">' + Path('.github/scripts/brand-theme.css').read_text() + '</style>'
 print_script = '<script>' + Path('.github/scripts/print-window.js').read_text(encoding='utf-8') + '</script>'
 print_script += '<script>' + Path('.github/scripts/download-file.js').read_text(encoding='utf-8') + '</script>'

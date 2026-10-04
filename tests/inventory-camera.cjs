@@ -1,0 +1,18 @@
+const fs=require('fs'),assert=require('assert'),{JSDOM}=require('jsdom');
+const html=fs.readFileSync('tests/.generated/site/index.html','utf8');
+const dom=new JSDOM('<input id="invPhoto" type="file"><input id="invCamera" type="file">',{runScripts:'outside-only'});
+const w=dom.window, photo=w.document.getElementById('invPhoto');
+let preview=0,selected;
+Object.defineProperty(photo,'files',{get:()=>selected,set:value=>selected=value});
+w.previewInventoryPhoto=()=>preview++;
+w.alert=message=>{throw new Error(message)};
+w.DataTransfer=class{constructor(){this.files=[];this.items={add:file=>this.files.push(file)}}};
+w.eval(html.match(/function selectInventoryCameraPhoto\(input\)\{[\s\S]*?(?=function previewInventoryPhoto)/)[0]);
+const file=new w.File(['photo'],'inventory.jpg',{type:'image/jpeg'});
+w.selectInventoryCameraPhoto({files:[file]});
+assert.equal(selected[0],file);assert.equal(preview,1);
+w.selectInventoryCameraPhoto({files:[]});
+assert.equal(selected[0],file);assert.equal(preview,1,'Cancel keeps selected photo');
+assert(html.includes('capture="environment"'));
+assert(html.includes('id="invPhoto" type="file" accept="image/*"'));
+dom.window.close();console.log('PASS: camera photo uses existing image preview/save input; cancel preserves selection');
