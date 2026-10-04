@@ -22,6 +22,14 @@ s = s.replace('function previewInventoryPhoto(){', '''function selectInventoryCa
   }catch(error){alert('This device could not attach the camera photo. Please use Add image.');}
 }
 function previewInventoryPhoto(){''')
+# Preserve photo nodes when unrelated sync state causes a global render.
+s = s.replace("  inventoryList.innerHTML=arr.length?", "  const inventoryCardsHTML=arr.length?")
+s = s.replace("  hydrateInventoryPhotos();", '''  const inventoryRenderKey=JSON.stringify([localStorage.getItem('losStudioCloudLocalOwnerV1'),inventoryCardsHTML,arr.map(i=>[i.id,i.updatedAt,i.photoName])]);
+  if(inventoryList.__losRenderKey!==inventoryRenderKey){
+    inventoryList.__losRenderKey=inventoryRenderKey;
+    inventoryList.innerHTML=inventoryCardsHTML;
+    hydrateInventoryPhotos();
+  }''', 1)
 theme = '<style id="los-brand-theme">' + Path('.github/scripts/brand-theme.css').read_text() + '</style>'
 print_script = '<script>' + Path('.github/scripts/print-window.js').read_text(encoding='utf-8') + '</script>'
 print_script += '<script>' + Path('.github/scripts/download-file.js').read_text(encoding='utf-8') + '</script>'

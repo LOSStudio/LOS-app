@@ -59,6 +59,18 @@ public class MainActivity extends Activity {
     }
 
     public static class SupabaseBridge {
+        private final WebView target;
+        public SupabaseBridge(WebView target) { this.target = target; }
+        @JavascriptInterface
+        public void requestAsync(String id, String url, String requestJson) {
+            new Thread(() -> {
+                String result = request(url, requestJson);
+                target.post(() -> target.evaluateJavascript(
+                        "window.__losNativeResponse && window.__losNativeResponse("
+                        + JSONObject.quote(id) + "," + JSONObject.quote(result) + ")", null));
+            }).start();
+        }
+
         @JavascriptInterface
         public String request(String url, String requestJson) {
             if (!isSupabaseUrl(url)) {
@@ -202,7 +214,7 @@ public class MainActivity extends Activity {
             cookies.setAcceptThirdPartyCookies(webView, true);
         }
 
-        webView.addJavascriptInterface(new SupabaseBridge(), "AndroidSupabase");
+        webView.addJavascriptInterface(new SupabaseBridge(webView), "AndroidSupabase");
         webView.addJavascriptInterface(new Object() {
             @JavascriptInterface
             public void printHtml(String html, String title) {
