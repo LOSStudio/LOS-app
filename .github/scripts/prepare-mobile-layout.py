@@ -30,6 +30,19 @@ s = s.replace("  hydrateInventoryPhotos();", '''  const inventoryRenderKey=JSON.
     inventoryList.innerHTML=inventoryCardsHTML;
     hydrateInventoryPhotos();
   }''', 1)
+
+# Expand fabric subcategories without changing existing saved values.
+fabric_match = re.search(r"const FABRIC_SUBCATEGORIES=\{[\s\S]*?\n\};", s)
+if not fabric_match:
+    raise SystemExit('Fabric subcategory definitions not found')
+fabric_block = fabric_match.group(0)
+extra = ['Polka Dots','Vines','Gingham','Blended','Micro Florals','Stripes','White on White','Other']
+def expand_fabric_options(match):
+    values = match.group(1)
+    return '[' + values + ',' + ','.join(repr(value) for value in extra if repr(value) not in values) + ']'
+fabric_block = re.sub(r"\[([^\]\n]*)\]", expand_fabric_options, fabric_block)
+s = s[:fabric_match.start()] + fabric_block + s[fabric_match.end():]
+
 theme = '<style id="los-brand-theme">' + Path('.github/scripts/brand-theme.css').read_text() + '</style>'
 print_script = '<script>' + Path('.github/scripts/print-window.js').read_text(encoding='utf-8') + '</script>'
 print_script += '<script>' + Path('.github/scripts/download-file.js').read_text(encoding='utf-8') + '</script>'
