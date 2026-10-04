@@ -2,7 +2,14 @@
    Record arrays merge by id, so unrelated edits and deletions do not replace whole modules. */
 (function(root){
   const missing=Symbol('missing');
-  const equal=(a,b)=>a===b||(a!==missing&&b!==missing&&JSON.stringify(a)===JSON.stringify(b));
+  // PostgreSQL JSONB reorders object keys. Compare values, preserving array order.
+  function equal(a,b){
+    if(a===b)return true;
+    if(a===missing||b===missing||a===null||b===null||typeof a!=='object'||typeof b!=='object')return false;
+    if(Array.isArray(a)||Array.isArray(b))return Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&a.every((v,i)=>equal(v,b[i]));
+    const keys=Object.keys(a);
+    return keys.length===Object.keys(b).length&&keys.every(k=>Object.hasOwn(b,k)&&equal(a[k],b[k]));
+  }
   const object=v=>v!==null&&typeof v==='object'&&!Array.isArray(v)&&v!==missing;
   const records=v=>Array.isArray(v)&&v.every(x=>object(x)&&x.id!==undefined);
   function merge(base,local,remote){

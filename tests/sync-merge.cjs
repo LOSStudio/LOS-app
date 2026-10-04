@@ -1,6 +1,11 @@
-const assert=require('assert');const {merge}=require('../.github/scripts/sync-merge.js');
+const assert=require('assert');const {merge,equal}=require('../.github/scripts/sync-merge.js');
 assert.deepEqual(merge({a:1,b:1},{a:2,b:1},{a:1,b:3}),{a:2,b:3});
 assert.deepEqual(merge([{id:'a',qty:1},{id:'b',qty:2}],[{id:'a',qty:3},{id:'b',qty:2}],[{id:'a',qty:1},{id:'b',qty:4}]),[{id:'a',qty:3},{id:'b',qty:4}]);
 assert.deepEqual(merge([{id:'a'},{id:'b'}],[{id:'b'}],[{id:'a'},{id:'b'},{id:'c'}]),[{id:'b'},{id:'c'}]);
 assert.deepEqual(merge({text:'old'},{text:'device A'},{text:'device B'}),{text:'device A'});
 console.log('PASS: disjoint fields, disjoint records, deletion plus addition, and same-field last committing edit');
+
+assert(equal({name:'fabric',details:{qty:2,unit:'m'}},{details:{unit:'m',qty:2},name:'fabric'}));
+assert(!equal([1,2],[2,1]));
+assert(!equal({qty:2},{qty:3}));
+assert(!equal({a:undefined},{b:undefined}));

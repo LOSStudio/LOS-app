@@ -5,7 +5,8 @@ const {webcrypto}=require('crypto');const fs=require('fs'),path=require('path'),
 const nativeClone=global.structuredClone;global.structuredClone=function(value){if(value&&typeof value==='object'){const tag=Object.prototype.toString.call(value);if(tag==='[object Blob]'||tag==='[object File]')return value;if(Array.isArray(value))return value.map(global.structuredClone);if(tag==='[object Object]'||Object.getPrototypeOf(value)===null)return Object.fromEntries(Object.entries(value).map(([k,v])=>[k,global.structuredClone(v)]))}return nativeClone(value)};
 const html=fs.readFileSync(path.join(__dirname,'.generated/site/index.html'),'utf8');
 const server={rows:new Map(),files:new Map(),recovery:[],attempts:0};const windows=[];
-const clone=v=>JSON.parse(JSON.stringify(v));
+const canonical=v=>Array.isArray(v)?v.map(canonical):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort((a,b)=>a.length-b.length||a.localeCompare(b)).map(k=>[k,canonical(v[k])])):v;
+const clone=v=>canonical(JSON.parse(JSON.stringify(v)));
 async function device(id){
  const errors=[];let callback;const account={id:'account-one',email:'one@example.com'};
  const vc=new VirtualConsole();vc.on('jsdomError',e=>{if(!/Not implemented/.test(e.message))errors.push(e.message)});
@@ -24,7 +25,15 @@ async function device(id){
 }
 (async()=>{
  const a=await device('device-a');a.w.eval("state.info.phone='123';state.inventory=[{id:'fabric',name:'Cotton',qty:2,unit:'m',cost:3}];saveState()");await a.w.losCloudSyncNow();
+ const settled=server.attempts;await a.w.losCloudSyncNow();await a.w.losCloudSyncNow();assert.equal(server.attempts,settled,'Idle sync must not commit identical PostgreSQL JSONB data');
  const b=await device('device-b');assert.equal(b.w.eval('state.info.phone'),'123','Login pulls account data');assert.equal(b.w.eval('state.inventory[0].name'),'Cotton');
+ // Two open devices must settle even though JSONB changes object-key order.
+ await a.w.losCloudSyncNow();await b.w.losCloudSyncNow();
+ const idleCommits=server.attempts;
+ for(let i=0;i<3;i++){await a.w.losCloudSyncNow();await b.w.losCloudSyncNow()}
+ assert.equal(server.attempts,idleCommits,'Idle devices must not ping-pong cloud commits');
+ a.w.saveState();await a.w.losCloudSyncNow();
+ assert.equal(server.attempts,idleCommits,'Persisting unchanged state must not upload again');
  // Different fields edited before either device notices the other's changes.
  a.w.eval("state.info.phone='456';saveState()");b.w.eval("state.info.email='shop@example.com';saveState()");await Promise.all([a.w.losCloudSyncNow(),b.w.losCloudSyncNow()]);await a.w.losCloudSyncNow();await b.w.losCloudSyncNow();
  assert.equal(server.rows.get('account-one').state.info.phone,'456');assert.equal(server.rows.get('account-one').state.info.email,'shop@example.com');assert.equal(a.w.eval('state.info.email'),'shop@example.com');

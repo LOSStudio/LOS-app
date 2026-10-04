@@ -38,7 +38,13 @@ function __losPatchSyncRealm(w){try{if(!w||w.__losSyncRealmPatched)return;const 
 __losPatchSyncRealm(window);
 function __losHookSyncIframes(){document.querySelectorAll('iframe').forEach(f=>{try{if(!f.__losSyncLoadHooked){f.__losSyncLoadHooked=true;f.addEventListener('load',()=>__losPatchSyncRealm(f.contentWindow))}if(f.contentDocument)__losPatchSyncRealm(f.contentWindow)}catch(e){}})}
 __losHookSyncIframes();new MutationObserver(__losHookSyncIframes).observe(document.documentElement,{childList:true,subtree:true});
-for(const name of ['saveState','persistHistoryState']){const original=window[name];if(original)window[name]=function(){const r=original.apply(this,arguments);__losMarkLocalChange();return r}}
+// Replace the old unconditional push wrapper; an unchanged persist is not an edit.
+if(origPersist)window.persistHistoryState=function(){
+  let before;try{before=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null')}catch(e){}
+  const r=origPersist.apply(this,arguments);
+  if(!__losSyncApplying&&!LOSSyncMerge.equal(before,state))__losMarkLocalChange();
+  return r;
+};
 // Watch committed file writes, including deletions and files whose metadata did not change.
 if(window.IDBObjectStore){for(const method of ['put','add','delete','clear']){const original=IDBObjectStore.prototype[method];IDBObjectStore.prototype[method]=function(){const request=original.apply(this,arguments);if(__losFileStores.some(x=>(x.db===this.transaction.db.name||x.db+'__'+__losAccountId===this.transaction.db.name)&&x.store===this.name)){this.transaction.addEventListener('complete',()=>{if(!__losSyncApplying){__losFileDirty=true;__losMarkLocalChange()}},{once:true})}return request}}}
 function __losMetaDB(){return new Promise((resolve,reject)=>{const req=indexedDB.open('LOSStudioCloudMetaV2',1);req.onupgradeneeded=()=>req.result.createObjectStore('accounts',{keyPath:'id'});req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)})}
