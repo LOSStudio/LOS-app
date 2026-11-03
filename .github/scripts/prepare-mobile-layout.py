@@ -139,4 +139,109 @@ body_end = s.rfind('</body>')
 if body_end < 0:
     raise SystemExit('App body closing tag not found')
 s = s[:body_end] + nav_script + guard + s[body_end:]
+# Fabric cut pieces use area-equivalent stock quantities, retaining the existing
+# project cost/deduction pipeline and legacy quantity-only project records.
+def replace_project_once(old, new):
+    global s
+    if s.count(old) != 1:
+        raise SystemExit('Project fabric patch target missing or ambiguous: ' + old[:80])
+    s = s.replace(old, new, 1)
+
+replace_project_once('<select id="proMatInventory"></select>', '<select id="proMatInventory" onchange="updateProjectMaterialFields()"></select>')
+replace_project_once('<button class="btn secondary" onclick="addProjectMaterial()">+ Add</button>', '')
+replace_project_once('<label>Qty Used</label><input id="proMatQty" type="number" step="0.01">', '<label id="proMatQtyLabel">Qty Used</label><input id="proMatQty" type="number" min="0" step="any" inputmode="decimal">')
+replace_project_once('<div id="projectMaterialsList"', '''<div id="proFabricFields" style="display:none;margin-top:12px">
+          <div class="form-grid">
+            <div class="field"><label for="proFabricLength">Length used (cm)</label><input id="proFabricLength" type="number" min="0" step="any" inputmode="decimal" oninput="previewProjectFabric()"></div>
+            <div class="field"><label for="proFabricWidth">Width used (cm)</label><input id="proFabricWidth" type="number" min="0" step="any" inputmode="decimal" oninput="previewProjectFabric()"></div>
+            <div class="field"><label for="proFabricPieces">Number of pieces</label><input id="proFabricPieces" type="number" min="1" step="1" value="1" inputmode="numeric" oninput="previewProjectFabric()"></div>
+            <div class="field"><label for="proFabricOriginalWidth">Original fabric width (cm)</label><input id="proFabricOriginalWidth" type="number" min="0" step="any" inputmode="decimal" oninput="previewProjectFabric()"></div>
+            <div class="field" id="proFabricOriginalLengthField"><label for="proFabricOriginalLength">Original piece length (cm)</label><input id="proFabricOriginalLength" type="number" min="0" step="any" inputmode="decimal" oninput="previewProjectFabric()"></div>
+          </div>
+          <p class="muted">Enter the cut rectangle, including any waste you want to charge to this project. Each piece uses the same measurements. Stock is deducted by equivalent area, not the shape or usable length of the remaining fabric.</p>
+          <p id="proFabricPreview" role="status" aria-live="polite"></p>
+        </div>
+        <button class="btn secondary" style="margin-top:10px" onclick="addProjectMaterial()">+ Add material</button>
+        <div id="projectMaterialsList"''')
+replace_project_once("currentProjectId=null;\n  projectDraftMaterials=[];", "currentProjectId=null;\n  projectDraftMaterials=[];\n  proMatInventory.value='';\n  document.getElementById('proFabricFields').dataset.inventoryId='';\n  proMatQty.value='';proMatNotes.value='';")
+replace_project_once("if([...proMatInventory.options].some(o=>o.value===cur))proMatInventory.value=cur;", "if([...proMatInventory.options].some(o=>o.value===cur))proMatInventory.value=cur;\n  updateProjectMaterialFields();")
+start=s.index('function addProjectMaterial(){')
+end=s.index('function removeProjectMaterial(',start)
+s=s[:start]+r'''
+function projectFabricUsage(item,lengthCm,widthCm,pieces,originalWidthCm,originalLengthCm){
+  const positive=v=>Number.isFinite(v)&&v>0;
+  if(![lengthCm,widthCm,pieces,originalWidthCm].every(positive)||!Number.isInteger(pieces))throw new Error('Enter positive length and width measurements and a whole number of pieces. Include the original fabric width.');
+  const unit=item.unit;
+  let basisLengthCm;
+  if(unit==='m')basisLengthCm=100;
+  else if(unit==='cm')basisLengthCm=1;
+  else if(['piece','square75','fat-quarter'].includes(unit)){
+    basisLengthCm=originalLengthCm;
+    if(!positive(basisLengthCm))throw new Error('Enter the original length of one stock piece to calculate its cost.');
+  }else throw new Error('Choose metres, centimetres or a supported piece unit for this fabric in Inventory.');
+  const fits=unit==='m'||unit==='cm'
+    ? Math.min(lengthCm,widthCm)<=originalWidthCm
+    : (lengthCm<=basisLengthCm&&widthCm<=originalWidthCm)||(widthCm<=basisLengthCm&&lengthCm<=originalWidthCm);
+  if(!fits)throw new Error('The cut piece is larger than the original fabric dimensions. Check the measurements.');
+  const areaCm2=lengthCm*widthCm*pieces;
+  const qty=areaCm2/(originalWidthCm*basisLengthCm);
+  if(!positive(qty))throw new Error('These measurements cannot be calculated.');
+  return {qty,fabricUsage:{lengthCm,widthCm,pieces,areaCm2,originalWidthCm,originalLengthCm:basisLengthCm,unit}};
+}
+function projectFabricDescription(m){
+  const f=m.fabricUsage;
+  return f?`${f.lengthCm} × ${f.widthCm} cm × ${f.pieces} piece${f.pieces===1?'':'s'} · ${f.areaCm2} cm²`:'';
+}
+function updateProjectMaterialFields(){
+  const item=state.inventory.find(i=>i.id===proMatInventory.value);
+  const fabric=!!item&&getInventoryType(item)==='Fabric';
+  document.getElementById('proFabricFields').style.display=fabric?'block':'none';
+  proMatQty.closest('.field').style.display=fabric?'none':'flex';
+  document.getElementById('proMatQtyLabel').textContent=`Qty used${item?.unit?' ('+item.unit+')':''}`;
+  const fields=document.getElementById('proFabricFields');
+  if(fields.dataset.inventoryId!==(item?.id||'')){
+    fields.dataset.inventoryId=item?.id||'';
+    proMatQty.value='';
+    document.getElementById('proFabricLength').value='';
+    document.getElementById('proFabricWidth').value='';
+    document.getElementById('proFabricPieces').value=1;
+    document.getElementById('proFabricOriginalWidth').value=item?.width||(item?.unit==='square75'?75:'');
+    document.getElementById('proFabricOriginalLength').value=item?.unit==='square75'?75:'';
+  }
+  document.getElementById('proFabricOriginalLengthField').style.display=fabric&&!['m','cm'].includes(item.unit)?'flex':'none';
+  previewProjectFabric();
+}
+function readProjectFabricUsage(item){
+  const value=id=>Number(document.getElementById(id).value);
+  return projectFabricUsage(item,value('proFabricLength'),value('proFabricWidth'),value('proFabricPieces'),value('proFabricOriginalWidth'),value('proFabricOriginalLength'));
+}
+function previewProjectFabric(){
+  const item=state.inventory.find(i=>i.id===proMatInventory.value),el=document.getElementById('proFabricPreview');
+  if(!item||getInventoryType(item)!=='Fabric'){el.textContent='';return;}
+  try{
+    const m=readProjectFabricUsage(item);
+    el.textContent=`${projectFabricDescription(m)} · Cost ${money(m.qty*num(item.unitCost))} · Equivalent stock usage: ${Number(m.qty.toFixed(6))} ${item.unit}.`;
+  }catch(e){el.textContent=e.message;}
+}
+function addProjectMaterial(){
+  const inventoryId=proMatInventory.value;
+  const item=state.inventory.find(i=>i.id===inventoryId);
+  if(!item)return alert('Choose an LOS inventory material.');
+  let usage={qty:Number(proMatQty.value)};
+  if(getInventoryType(item)==='Fabric'){
+    try{usage=readProjectFabricUsage(item);}catch(e){return alert(e.message);}
+  }
+  if(!Number.isFinite(usage.qty)||usage.qty<=0)return alert('Add a positive quantity used.');
+  projectDraftMaterials.push({id:uid('pmat'),inventoryId,...usage,notes:proMatNotes.value.trim()});
+  proMatQty.value='';proMatNotes.value='';
+  document.getElementById('proFabricLength').value='';
+  document.getElementById('proFabricWidth').value='';
+  document.getElementById('proFabricPieces').value=1;
+  previewProjectFabric();renderProjectMaterials();recalcProject();
+}
+''' + s[end:]
+replace_project_once("${num(m.qty)} ${esc(i?.unit||'')} used · ${money(cost)}", "${m.fabricUsage?esc(projectFabricDescription(m))+' · Equivalent stock: ':''}${Number(num(m.qty).toFixed(6))} ${esc(i?.unit||'')} used · ${money(cost)}")
+# Order pricing already accepts the equivalent quantity; retain dimensions in
+# its notes so a converted project remains understandable without re-entry.
+replace_project_once("notes:m.notes||'',stockManagedByProject:true", "notes:[projectFabricDescription(m),m.notes||''].filter(Boolean).join(' · '),fabricUsage:m.fabricUsage?{...m.fabricUsage}:undefined,stockManagedByProject:true")
 p.write_text(s, encoding='utf-8')
